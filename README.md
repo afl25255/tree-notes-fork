@@ -8,7 +8,7 @@
 
 TreeNotes is an **open-source** web application designed to help students, researchers, and professionals capture, organize, and interconnect ideas effectively.
 
-It combines the **Stanford Note-Taking Method** with a **network-based knowledge model**, where each note becomes a “node” in a graph, and relationships between ideas are represented as links between these nodes. This lets users visualize and explore how their notes and concepts relate, rather than seeing them as isolated entries.
+It combines the **Cornell Note-Taking Method** with a **network-based knowledge model**, where each note becomes a “node” in a graph, and relationships between ideas are represented as links between these nodes. This lets users visualize and explore how their notes and concepts relate, rather than seeing them as isolated entries.
 
 An **AI module** powered by **Large Language Models (LLMs)** through **Ollama** will analyze note content, automatically create nodes for key ideas, and establish links between related concepts. Users can also manually create and connect notes for full control over their knowledge map.
 
@@ -28,7 +28,7 @@ An **AI module** powered by **Large Language Models (LLMs)** through **Ollama** 
 ### **Planned Features**
 
 1. **AI-Assisted Linking** – Analyze text and auto-create relationships between concepts.
-2. **Enhanced Stanford Method Support** – Cue, note, and summary sections in every note.
+2. **Enhanced the Cornell Method Support** – Cue, note, and summary sections in every note.
 3. **Graph Visualization** – Interactive network map showing relationships.
 4. **Semantic Search** – Use AI to find relevant notes by meaning, not just keywords.
 5. **User Interface Improvements** – More intuitive linking and navigation tools.
@@ -74,7 +74,7 @@ The AI module will:
 
 TreeNotes will help students:
 
-* Organize information using a proven method (Stanford Note-Taking).
+* Organize information using a proven method (The Cornell Note-Taking).
 * Discover hidden connections between concepts.
 * Reduce study time through AI-assisted linking and search.
 * Practice working with modern AI and web development tools.
@@ -114,7 +114,7 @@ TreeNotes will remain open source on GitHub, enabling the community to:
 | **3** | Add manual linking UI with drag/drop graph         | Connect manual linking endpoints to DB      | Create AI service endpoint in FastAPI           | Implement DB changes & relationships            |
 | **4** | Integrate frontend calls to AI suggestion endpoint | Optimize backend for AI request handling    | Train/tune AI prompts for concept extraction    | Set up Docker multi-container orchestration     |
 | **5** | Develop graph visualization component              | Support graph data retrieval API            | Implement automatic node & link creation        | Add DB indexing for fast graph queries          |
-| **6** | Enhance Stanford Method input templates            | Add semantic search endpoints               | Integrate semantic search using LLM             | Optimize queries for semantic matching          |
+| **6** | Enhance the Cornell Method input templates            | Add semantic search endpoints               | Integrate semantic search using LLM             | Optimize queries for semantic matching          |
 | **7** | UI polish, mobile-friendly layout                  | API load testing & bug fixes                | AI performance optimization & caching           | CI/CD pipeline for deployment                   |
 | **8** | Final UI testing & documentation                   | Backend documentation & code cleanup        | AI usage guide & examples                       | Deployment scripts & final Docker images        |
 
