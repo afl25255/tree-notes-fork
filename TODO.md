@@ -2,11 +2,14 @@
 
 ## Next steps
 
-If you plan to continue developing this project, the most natural order is:
+1. Wire the frontend save/load flow to the FastAPI `/notes` API (keep JSON export as fallback if desired).
+2. Move Ollama calls behind the backend instead of calling it directly from the browser.
+3. Add frontend tests for API-backed save/load; extend backend tests (e.g. Postgres in CI) as needed.
+4. Authentication and per-user notes when the product requires it.
 
-1. Add a backend Dockerfile and compose service for the FastAPI app.
-2. Connect FastAPI to PostgreSQL.
-3. Define a schema for notes, boxes, and links.
-4. Replace file-only save/load with API-based persistence.
-5. Move Ollama calls behind the backend instead of calling it directly from the browser.
-6. Add tests for frontend save/load behavior and backend API routes.
+## Done (backend baseline)
+
+- FastAPI Dockerfile and `api` service in `docker-compose.yml`
+- PostgreSQL schema (notes, boxes, edges) and Alembic migrations
+- Note CRUD aligned with the frontend JSON export shape
+- `pytest` coverage for health and note round-trip (SQLite in-memory)

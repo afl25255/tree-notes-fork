@@ -111,23 +111,17 @@ The frontend is the real working application today.
 
 ### Backend
 
-The backend is a starter service only.
+The backend is a **FastAPI** app in `BackEnd/` with **PostgreSQL** persistence (notes, boxes, edges), **Alembic** migrations, and **CORS** for a static frontend on another origin. See [BackEnd/README.md](BackEnd/README.md) for routes and run instructions.
 
-`BackEnd/main.py` exposes:
+It still does not:
 
-- `GET /` -> returns a simple `"Backend running"` message
-- `GET /health` -> returns `{ "status": "ok" }`
-
-Right now it does not:
-
-- store notes,
-- connect to PostgreSQL,
-- proxy Ollama,
-- serve the frontend.
+- proxy Ollama (the UI calls Ollama from the browser),
+- serve the frontend as static files (serve `frontend/` separately),
+- authenticate users.
 
 ### Database
 
-`docker-compose.yml` starts a PostgreSQL 15 container named `treenotes_db` with a persistent Docker volume. The database is prepared for future backend integration, but the current frontend does not use it yet.
+`docker-compose.yml` can start **PostgreSQL 15** (`treenotes_db`) and optionally the **`api`** service. The backend uses the database for note CRUD; the **frontend is not yet wired to the API** (export/import remains file-based until integrated).
 
 ## Run the project
 
@@ -156,12 +150,13 @@ docker run --rm -p 8080:80 treenotes-frontend
 
 ### 2. Backend
 
-From `BackEnd/`:
+From `BackEnd/` (with PostgreSQL reachable — see step 3):
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
+python -m alembic upgrade head
 uvicorn main:app --reload --port 8000
 ```
 
@@ -170,12 +165,18 @@ Then open:
 - API root: `http://127.0.0.1:8000`
 - Swagger docs: `http://127.0.0.1:8000/docs`
 
-### 3. PostgreSQL
+### 3. PostgreSQL (and optional API via Docker)
 
 From the repository root:
 
 ```bash
 copy .env.example .env
+docker compose up -d db
+```
+
+To run **Postgres and the API** together:
+
+```bash
 docker compose up -d
 ```
 
@@ -185,6 +186,7 @@ Default values from `.env.example`:
 - `POSTGRES_PASSWORD=changeme`
 - `POSTGRES_DB=treenotes`
 - `POSTGRES_PORT=5432`
+- `DATABASE_URL` — used by the API when running locally (see `.env.example`)
 
 ### 4. Ollama for local analysis
 
@@ -209,14 +211,12 @@ After that, open the frontend and click the robot button in the notes toolbar.
 - dark mode
 - JSON export/import
 - local Ollama-powered note analysis
-- starter FastAPI backend
-- starter PostgreSQL Docker setup
+- FastAPI backend with PostgreSQL persistence (notes, boxes, links) and Alembic migrations
+- PostgreSQL Docker setup; optional `api` service in Compose
 
 ## What is not finished yet
 
-- no persistence through the backend
-- no frontend-to-backend API integration
-- no PostgreSQL models or migrations
+- no frontend-to-backend API integration (save/load still file-based in the UI)
 - no authentication
 - no completed help/about flows
 - dictation is still a placeholder
@@ -230,9 +230,9 @@ The planned development steps are collected in [TODO.md](TODO.md).
 
 - The backend folder is named `BackEnd/`, not `backend/`.
 - The repository already contains a backend-specific README at [BackEnd/README.md](BackEnd/README.md).
-- The root `docker-compose.yml` currently starts only PostgreSQL.
+- The root `docker-compose.yml` can start PostgreSQL and the `api` service (see `.env.example`).
 - The main product behavior is currently in one large file: [frontend/script.js](frontend/script.js).
 
 ## Summary
 
-Today, Tree Notes is primarily a browser-based visual Cornell notes editor with local file export/import and optional local Ollama analysis. The backend and database pieces are present as scaffolding for the next stage, but the frontend is the part that currently delivers the real end-user functionality.
+Today, Tree Notes is primarily a browser-based visual Cornell notes editor with local file export/import and optional local Ollama analysis. A **FastAPI** backend persists notes in **PostgreSQL**; the **UI still uses files** for save/load until wired to the API.

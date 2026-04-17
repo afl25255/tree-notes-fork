@@ -1,4 +1,4 @@
-# TreeNotes local stack — PostgreSQL only for now.
+# TreeNotes local stack — PostgreSQL + FastAPI API.
 #
 # Adjustments from a bare compose file:
 # - No top-level "version:" — modern Docker Compose (v2+) ignores it; see https://docs.docker.com/compose/compose-file/
@@ -8,6 +8,21 @@
 # - restart: unless-stopped — restarts after reboot without fighting "docker compose stop" as much as "always"
 
 services:
+  api:
+    build:
+      context: ./BackEnd
+      dockerfile: Dockerfile
+    container_name: treenotes_api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-treenotes}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://127.0.0.1:8080,http://localhost:8080}
+    depends_on:
+      db:
+        condition: service_healthy
+
   db:
     image: postgres:15-alpine
     container_name: treenotes_db
