@@ -16,6 +16,7 @@ def test_note_crud_roundtrip(client: TestClient) -> None:
     r = client.post("/notes", json={})
     assert r.status_code == 201
     doc = r.json()
+    assert doc.get("id")
     assert doc["heading"] == ""
     assert doc["boxes"] == []
     r = client.get("/notes")
@@ -46,6 +47,7 @@ def test_note_crud_roundtrip(client: TestClient) -> None:
     r = client.put(f"/notes/{nid}", json=payload)
     assert r.status_code == 200
     out = r.json()
+    assert out.get("id") == nid
     assert out["heading"] == "H"
     assert len(out["boxes"]) == 2
     ids = {b["id"] for b in out["boxes"]}

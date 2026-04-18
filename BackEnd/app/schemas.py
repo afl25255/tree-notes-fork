@@ -28,6 +28,7 @@ class BoxInOut(BaseModel):
 class NoteDocument(BaseModel):
     """Full note payload aligned with frontend JSON export."""
 
+    id: Optional[UUID] = None
     heading: str = ""
     cueText: str = ""
     summary: str = ""

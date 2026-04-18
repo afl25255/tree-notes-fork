@@ -5,14 +5,14 @@ Tree Notes is a visual note-taking app built around the Cornell Notes layout. Th
 ## What is in this repository
 
 - `frontend/` - the main application UI: static HTML, CSS, and vanilla JavaScript.
-- `BackEnd/` - a minimal FastAPI service with health endpoints.
-- `docker-compose.yml` - local PostgreSQL service definition.
+- `BackEnd/` - FastAPI service with `/notes` CRUD and PostgreSQL persistence.
+- `docker-compose.yml` - **web** (nginx + UI), **api** (FastAPI), **db** (PostgreSQL).
 - `.env.example` - example database environment variables for Docker Compose.
 - `logo/` - project branding assets.
 
 ## How the app works
 
-The current application is frontend-first. Most features run entirely in the browser, and no persistent backend storage is wired in yet.
+The application is frontend-first: the UI runs in the browser. You can save notes to the **FastAPI** backend (toolbar **☁️** / **📂**) or keep using **JSON file** export/import (**💾** / **⬆️**). Set the API base URL in the app menu (default `http://127.0.0.1:8000`); optional URL params: `?api=` and `?note=` (UUID) for deep links.
 
 ### Cornell layout
 
@@ -116,18 +116,34 @@ The backend is a **FastAPI** app in `BackEnd/` with **PostgreSQL** persistence (
 It still does not:
 
 - proxy Ollama (the UI calls Ollama from the browser),
-- serve the frontend as static files (serve `frontend/` separately),
+- serve the frontend outside of Docker Compose (Compose includes a `web` service),
 - authenticate users.
 
 ### Database
 
-`docker-compose.yml` can start **PostgreSQL 15** (`treenotes_db`) and optionally the **`api`** service. The backend uses the database for note CRUD; the **frontend is not yet wired to the API** (export/import remains file-based until integrated).
+`docker-compose.yml` can start **`web`** (nginx + static UI), **`api`** (FastAPI), and **`db`** (PostgreSQL 15). With the full stack, the UI uses the `/api` proxy in nginx (same origin). Calling the API on port `8000` directly from another origin still requires `CORS_ORIGINS` (see `.env.example`).
 
 ## Run the project
 
-### 1. Frontend only
+### 1. Full stack in Docker (recommended)
 
-If you just want to use the app UI, serve the `frontend/` folder with any static server.
+From the **repository root** (UI + API + Postgres in one command):
+
+```bash
+copy .env.example .env
+docker compose up --build -d
+```
+
+Then open **`http://127.0.0.1:8080`** (or `http://localhost:8080`). The browser talks to the API via **same-origin** paths under `/api` (nginx proxies to the `api` service), so you do not need to change the API URL in the menu for a normal local setup.
+
+- Interactive API docs (Swagger): `http://127.0.0.1:8000/docs` (API port from `.env`, default `8000`).
+- Port for the web UI: `FRONTEND_PORT` in `.env` (default `8080`).
+
+Rebuild after frontend or backend changes: `docker compose up --build -d`.
+
+### 2. Frontend only (without Docker)
+
+If you just want the UI and will run the API separately, serve the `frontend/` folder with any static server.
 
 Example with Python:
 
@@ -136,21 +152,13 @@ cd frontend
 python -m http.server 8080
 ```
 
-Then open:
+Then open `http://localhost:8080` and set the **API URL** in the app menu to `http://127.0.0.1:8000` if your API runs on the host.
 
-`http://localhost:8080`
+The `frontend/Dockerfile` is intended to be built **together** with `docker compose` (it expects the `api` hostname for `/api` proxying). For static files only, use `python -m http.server` as above.
 
-You can also build/run the frontend container:
+### 3. Backend
 
-```bash
-cd frontend
-docker build -t treenotes-frontend .
-docker run --rm -p 8080:80 treenotes-frontend
-```
-
-### 2. Backend
-
-From `BackEnd/` (with PostgreSQL reachable — see step 3):
+From `BackEnd/` (with PostgreSQL reachable — see **section 4** below):
 
 ```bash
 python -m venv .venv
@@ -165,7 +173,7 @@ Then open:
 - API root: `http://127.0.0.1:8000`
 - Swagger docs: `http://127.0.0.1:8000/docs`
 
-### 3. PostgreSQL (and optional API via Docker)
+### 4. PostgreSQL only (or API without the `web` service)
 
 From the repository root:
 
@@ -174,11 +182,13 @@ copy .env.example .env
 docker compose up -d db
 ```
 
-To run **Postgres and the API** together:
+To run **Postgres and the API** without the nginx UI:
 
 ```bash
-docker compose up -d
+docker compose up -d db api
 ```
+
+To run the **full stack** (including `web`), use [section 1](#1-full-stack-in-docker-recommended) above.
 
 Default values from `.env.example`:
 
@@ -188,7 +198,7 @@ Default values from `.env.example`:
 - `POSTGRES_PORT=5432`
 - `DATABASE_URL` — used by the API when running locally (see `.env.example`)
 
-### 4. Ollama for local analysis
+### 5. Ollama for local analysis
 
 If you want the AI analysis button to work, Ollama must be installed and running locally on port `11434`.
 
@@ -209,14 +219,13 @@ After that, open the frontend and click the robot button in the notes toolbar.
 - zoom, panning, resizable split layout
 - fullscreen mode
 - dark mode
-- JSON export/import
+- JSON export/import and server save/load via the API
 - local Ollama-powered note analysis
 - FastAPI backend with PostgreSQL persistence (notes, boxes, links) and Alembic migrations
-- PostgreSQL Docker setup; optional `api` service in Compose
+- PostgreSQL Docker setup; Compose services `web`, `api`, and `db`
 
 ## What is not finished yet
 
-- no frontend-to-backend API integration (save/load still file-based in the UI)
 - no authentication
 - no completed help/about flows
 - dictation is still a placeholder
@@ -235,4 +244,4 @@ The planned development steps are collected in [TODO.md](TODO.md).
 
 ## Summary
 
-Today, Tree Notes is primarily a browser-based visual Cornell notes editor with local file export/import and optional local Ollama analysis. A **FastAPI** backend persists notes in **PostgreSQL**; the **UI still uses files** for save/load until wired to the API.
+Today, Tree Notes is a browser-based Cornell notes editor with optional **local file** JSON import/export and **server-backed** notes through the FastAPI API and PostgreSQL. Ollama is still called from the browser unless you add a backend proxy.

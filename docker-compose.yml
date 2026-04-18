@@ -1,4 +1,4 @@
-# TreeNotes local stack — PostgreSQL + FastAPI API.
+# TreeNotes local stack — web UI (nginx) + FastAPI API + PostgreSQL.
 #
 # Adjustments from a bare compose file:
 # - No top-level "version:" — modern Docker Compose (v2+) ignores it; see https://docs.docker.com/compose/compose-file/
@@ -8,6 +8,17 @@
 # - restart: unless-stopped — restarts after reboot without fighting "docker compose stop" as much as "always"
 
 services:
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: treenotes_web
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      - api
+
   api:
     build:
       context: ./BackEnd

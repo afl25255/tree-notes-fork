@@ -1053,14 +1053,65 @@ function noteInfo() {
 }
 
 // --------------------------------------------------------------------------
-// new additions
+// API (FastAPI backend)
 // --------------------------------------------------------------------------
 
- // --------------------------------------------------------------------------
-// Download Functionality
-// --------------------------------------------------------------------------
-function download() {
-    const data = {
+const TREENOTES_API_BASE_KEY = 'treenotes-api-base';
+const TREENOTES_NOTE_ID_KEY = 'treenotes-current-note-id';
+
+function getApiBase() {
+    const params = new URLSearchParams(location.search);
+    const fromQuery = params.get('api');
+    if (fromQuery) return fromQuery.replace(/\/$/, '');
+
+    const meta = document.querySelector('meta[name="treenotes-api-base"]');
+    if (meta?.content?.trim()) {
+        const c = meta.content.trim();
+        if (c.startsWith('/')) {
+            return `${location.origin}${c.replace(/\/$/, '')}`;
+        }
+        return c.replace(/\/$/, '');
+    }
+
+    const stored = localStorage.getItem(TREENOTES_API_BASE_KEY);
+    if (stored) return stored.replace(/\/$/, '');
+    if (typeof window.TREENOTES_API_BASE === 'string' && window.TREENOTES_API_BASE.trim()) {
+        return window.TREENOTES_API_BASE.trim().replace(/\/$/, '');
+    }
+    return 'http://127.0.0.1:8000';
+}
+
+let currentNoteId = sessionStorage.getItem(TREENOTES_NOTE_ID_KEY) || null;
+
+function setCurrentNoteId(id) {
+    currentNoteId = id || null;
+    if (id) sessionStorage.setItem(TREENOTES_NOTE_ID_KEY, id);
+    else sessionStorage.removeItem(TREENOTES_NOTE_ID_KEY);
+    updateApiNoteIndicator();
+}
+
+function updateApiNoteIndicator() {
+    const el = document.getElementById('apiNoteIndicator');
+    if (!el) return;
+    if (!currentNoteId) {
+        el.hidden = true;
+        el.textContent = '';
+        return;
+    }
+    el.hidden = false;
+    el.textContent = currentNoteId.slice(0, 8) + '…';
+    el.title = 'Server note: ' + currentNoteId;
+}
+
+function replaceUrlNoteParam(noteId) {
+    const url = new URL(location.href);
+    if (noteId) url.searchParams.set('note', noteId);
+    else url.searchParams.delete('note');
+    history.replaceState({}, '', url);
+}
+
+function collectNotebookPayload() {
+    return {
         heading: document.getElementById("headingText").innerText.trim(),
         cueText: document.getElementById("cueText").innerText.trim(),
         summary: document.getElementById("notesText").innerText.trim(),
@@ -1075,6 +1126,209 @@ function download() {
             lines: lines.map(String)
         }))
     };
+}
+
+function apiBodyFromCanvas() {
+    const raw = collectNotebookPayload();
+    return {
+        heading: raw.heading,
+        cueText: raw.cueText,
+        summary: raw.summary,
+        boxes: raw.boxes.map(b => ({
+            id: Number(b.id),
+            content: b.content,
+            style: {
+                left: b.style.left || '0px',
+                top: b.style.top || '20px',
+                backgroundColor: b.style.backgroundColor || null
+            },
+            lines: (b.lines || []).map(String)
+        }))
+    };
+}
+
+function applyImportedData(data) {
+    document.getElementById("headingText").innerText = data.heading || "";
+    document.getElementById("cueText").innerText = data.cueText || "";
+    document.getElementById("notesText").innerText = data.summary || "";
+    document.getElementById("boxes").innerHTML = '';
+    document.getElementById("lines").innerHTML = '';
+    boxes.clear();
+    totalBoxes = 0;
+
+    (data.boxes || []).forEach(({ id, content, style, lines }) => {
+        const left = parseInt(style?.left, 10) || 0;
+        const top = parseInt(style?.top, 10) || 0;
+        const newBox = createNewBlock(left, top, content, { id });
+
+        if (style?.backgroundColor) {
+            newBox.style.backgroundColor = style.backgroundColor;
+        }
+
+        const entry = boxes.get(newBox.id);
+        entry.lines = Array.isArray(lines) ? [...new Set(lines.map(String))] : [];
+    });
+
+    (data.boxes || []).forEach(({ id, lines }) => {
+        (lines || []).forEach(linkId => {
+            newLine(String(id), String(linkId));
+        });
+    });
+}
+
+async function saveNotebookToApi() {
+    const api = getApiBase();
+    const body = apiBodyFromCanvas();
+    setStatusMessage('Saving to server…', 'info');
+    try {
+        const url = currentNoteId
+            ? `${api}/notes/${encodeURIComponent(currentNoteId)}`
+            : `${api}/notes`;
+        const method = currentNoteId ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+            const t = await res.text();
+            throw new Error(t || res.statusText);
+        }
+        const doc = await res.json();
+        if (doc.id) {
+            setCurrentNoteId(doc.id);
+            replaceUrlNoteParam(doc.id);
+        }
+        setStatusMessage('Saved to server.', 'info');
+    } catch (e) {
+        setStatusMessage('Save failed: ' + (e.message || String(e)), 'error');
+    }
+}
+
+async function loadNotebookFromApiById(noteId) {
+    const api = getApiBase();
+    setStatusMessage('Loading from server…', 'info');
+    try {
+        const res = await fetch(`${api}/notes/${encodeURIComponent(noteId)}`);
+        if (res.status === 404) {
+            setCurrentNoteId(null);
+            replaceUrlNoteParam(null);
+            setStatusMessage('Note not found on server.', 'error');
+            return;
+        }
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        applyImportedData(data);
+        const nid = data.id || noteId;
+        setCurrentNoteId(nid);
+        replaceUrlNoteParam(nid);
+        setStatusMessage('Loaded from server.', 'info');
+    } catch (e) {
+        setStatusMessage('Load failed: ' + (e.message || String(e)), 'error');
+    }
+}
+
+async function fetchNotesListForDialog() {
+    const api = getApiBase();
+    const listEl = document.getElementById('apiOpenList');
+    const errEl = document.getElementById('apiOpenError');
+    if (errEl) {
+        errEl.hidden = true;
+        errEl.textContent = '';
+    }
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    try {
+        const res = await fetch(`${api}/notes`);
+        if (!res.ok) throw new Error(await res.text());
+        const rows = await res.json();
+        if (!rows.length) {
+            const li = document.createElement('li');
+            li.className = 'api-open-list__empty';
+            li.textContent = 'No notes yet.';
+            listEl.appendChild(li);
+            return;
+        }
+        rows.forEach(row => {
+            const li = document.createElement('li');
+            const btn = document.createElement('button');
+            const title = (row.heading || '(no title)').trim() || '(no title)';
+            const updated = row.updated_at ? new Date(row.updated_at).toLocaleString() : '';
+            btn.type = 'button';
+            btn.textContent = title + (updated ? ' — ' + updated : '');
+            btn.addEventListener('click', async () => {
+                document.getElementById('apiOpenDialog')?.close();
+                await loadNotebookFromApiById(row.id);
+            });
+            li.appendChild(btn);
+            listEl.appendChild(li);
+        });
+    } catch (e) {
+        if (errEl) {
+            errEl.textContent = e.message || String(e);
+            errEl.hidden = false;
+        }
+    }
+}
+
+function openApiNotesDialog() {
+    const dlg = document.getElementById('apiOpenDialog');
+    if (!dlg) return;
+    void fetchNotesListForDialog();
+    dlg.showModal();
+}
+
+function newBlankNotebook() {
+    document.getElementById("headingText").innerText = "";
+    document.getElementById("cueText").innerText = "";
+    document.getElementById("notesText").innerText = "";
+    document.getElementById("boxes").innerHTML = '';
+    document.getElementById("lines").innerHTML = '';
+    boxes.clear();
+    totalBoxes = 0;
+    createNewBlock(0, 20, "New Box", {});
+    setCurrentNoteId(null);
+    replaceUrlNoteParam(null);
+    setStatusMessage('New note (not saved to server yet).', 'info');
+}
+
+function initApiIntegration() {
+    const baseInput = document.getElementById('api-base-url');
+    if (baseInput) {
+        baseInput.value = localStorage.getItem(TREENOTES_API_BASE_KEY) || getApiBase();
+        baseInput.addEventListener('change', () => {
+            const v = baseInput.value.trim();
+            if (v) localStorage.setItem(TREENOTES_API_BASE_KEY, v.replace(/\/$/, ''));
+            else localStorage.removeItem(TREENOTES_API_BASE_KEY);
+        });
+    }
+
+    document.getElementById('apiSaveBtn')?.addEventListener('click', () => void saveNotebookToApi());
+    document.getElementById('apiOpenBtn')?.addEventListener('click', () => openApiNotesDialog());
+    document.getElementById('apiNewBtn')?.addEventListener('click', () => newBlankNotebook());
+    document.getElementById('apiOpenRefresh')?.addEventListener('click', () => void fetchNotesListForDialog());
+    document.getElementById('apiOpenCancel')?.addEventListener('click', () => {
+        document.getElementById('apiOpenDialog')?.close();
+    });
+
+    const params = new URLSearchParams(location.search);
+    const noteFromUrl = params.get('note');
+    if (noteFromUrl && /^[0-9a-f-]{36}$/i.test(noteFromUrl)) {
+        void loadNotebookFromApiById(noteFromUrl);
+    } else {
+        setCurrentNoteId(null);
+    }
+}
+
+// --------------------------------------------------------------------------
+// new additions
+// --------------------------------------------------------------------------
+
+ // --------------------------------------------------------------------------
+// Download Functionality
+// --------------------------------------------------------------------------
+function download() {
+    const data = collectNotebookPayload();
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -1098,33 +1352,10 @@ function upload() {
         const reader = new FileReader();
         reader.onload = evt => {
             const data = JSON.parse(evt.target.result);
-
-            document.getElementById("headingText").innerText = data.heading || "";
-            document.getElementById("cueText").innerText = data.cueText || "";
-            document.getElementById("notesText").innerText = data.summary || "";
-            document.getElementById("boxes").innerHTML = '';
-            document.getElementById("lines").innerHTML = '';
-            boxes.clear();
-            totalBoxes = 0;
-
-            (data.boxes || []).forEach(({ id, content, style, lines }) => {
-                const left = parseInt(style?.left, 10) || 0;
-                const top = parseInt(style?.top, 10) || 0;
-                const newBox = createNewBlock(left, top, content, { id });
-
-                if (style?.backgroundColor) {
-                    newBox.style.backgroundColor = style.backgroundColor;
-                }
-
-                const entry = boxes.get(newBox.id);
-                entry.lines = Array.isArray(lines) ? [...new Set(lines.map(String))] : [];
-            });
-
-            (data.boxes || []).forEach(({ id, lines }) => {
-                (lines || []).forEach(linkId => {
-                    newLine(String(id), String(linkId));
-                });
-            });
+            applyImportedData(data);
+            setCurrentNoteId(null);
+            replaceUrlNoteParam(null);
+            setStatusMessage('Loaded from file.', 'info');
         };
 
         reader.readAsText(file);
@@ -1304,6 +1535,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTreeMenu();
     initToolbarAssistControls();
     initResizer();
+    initApiIntegration();
 
     const fullscreenBtn = document.getElementById('fullscreen-btn');
     if(fullscreenBtn) {

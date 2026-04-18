@@ -87,6 +87,7 @@ def note_to_document(note: Note, session: Session) -> NoteDocument:
         )
 
     return NoteDocument(
+        id=note.id,
         heading=note.heading,
         cueText=note.cue_text,
         summary=note.summary_text,

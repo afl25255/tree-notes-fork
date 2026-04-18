@@ -25,6 +25,10 @@
                 <input type="checkbox" id="framework-of-trust">
                 <label for="framework-of-trust">Framework of Trust</label>
             </div>
+            <div class="menu-api-row">
+                <label for="api-base-url">API URL</label>
+                <input type="url" id="api-base-url" size="26" placeholder="http://127.0.0.1:8000" autocomplete="off">
+            </div>
         </div>
     </div>
 
@@ -56,6 +60,10 @@
                         <button class="button" id="analyzeNotesBtn" title="Analyze notes with local LLM">🤖</button>
                         <button class="button" onclick="download()" title="Download notes">💾</button>
                         <button class="button" onclick="upload()" title="Upload notes">⬆️</button>
+                        <button type="button" class="button" id="apiSaveBtn" title="Save to server (API)">☁️</button>
+                        <button type="button" class="button" id="apiOpenBtn" title="Open from server">📂</button>
+                        <button type="button" class="button" id="apiNewBtn" title="New local note">📄</button>
+                        <span id="apiNoteIndicator" class="api-note-indicator" title="Current server note id" hidden></span>
                         <button class="button" onclick="noteInfo()" title="Note info">📝</button>
                     </div>
 
@@ -102,6 +110,18 @@
         </div>
     </div>
 
+
+    <dialog id="apiOpenDialog" class="api-open-dialog">
+        <div class="api-open-dialog__inner">
+            <header class="api-open-dialog__header">Open from server</header>
+            <p id="apiOpenError" class="api-open-dialog__error" hidden></p>
+            <ul id="apiOpenList" class="api-open-list"></ul>
+            <div class="api-open-dialog__actions">
+                <button type="button" id="apiOpenRefresh">Refresh</button>
+                <button type="button" id="apiOpenCancel">Close</button>
+            </div>
+        </div>
+    </dialog>
 
     <div id="textToolbar" class="toolbar">
         <input id="t_boxColor" type="color" value="#eeeeee" aria-label="Highlight Color">
