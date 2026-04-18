@@ -12,4 +12,4 @@
 - PostgreSQL schema (notes, boxes, edges) and Alembic migrations
 - Note CRUD aligned with the frontend JSON export shape
 - `pytest` coverage for health and note round-trip (SQLite in-memory)
-- Frontend: save/load via `/notes` (toolbar ☁️ 📂 📄), menu API URL, optional `?note=` and `?api=` query params; JSON file import/export retained
+- Frontend: save/load via `/notes` (app menu ☁️ Save / 📂 Open / 📄 New), menu API URL, optional `?note=` and `?api=` query params; JSON file import/export retained

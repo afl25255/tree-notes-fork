@@ -12,7 +12,7 @@ Tree Notes is a visual note-taking app built around the Cornell Notes layout. Th
 
 ## How the app works
 
-The application is frontend-first: the UI runs in the browser. You can save notes to the **FastAPI** backend (toolbar **☁️** / **📂**) or keep using **JSON file** export/import (**💾** / **⬆️**). Set the API base URL in the app menu (default `http://127.0.0.1:8000`); optional URL params: `?api=` and `?note=` (UUID) for deep links.
+The application is frontend-first: the UI runs in the browser. You can save notes to the **FastAPI** backend from the **app menu** (☁️ Save / 📂 Open / 📄 New) or keep using **JSON file** export/import in the notes toolbar (**💾** / **⬆️**). Set the API base URL in the menu (default `http://127.0.0.1:8000` with Docker same-origin `/api`); optional URL params: `?api=` and `?note=` (UUID) for deep links.
 
 ### Cornell layout
 

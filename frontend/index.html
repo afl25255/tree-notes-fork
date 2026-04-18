@@ -11,7 +11,7 @@
 
     <!-- Floating App Menu -->
     <div id="appMenu">
-        <img src="TreenotesICON.png" alt="Menu" id="menuIcon">
+        <button type="button" id="menuIcon" class="menu-icon-btn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
         <div id="menuPopup">
             <p><strong>📘 TreeNotes Menu</strong></p>
             <button id="toggleDarkMode">🌓 Toggle Dark Mode</button>
@@ -28,6 +28,12 @@
             <div class="menu-api-row">
                 <label for="api-base-url">API URL</label>
                 <input type="url" id="api-base-url" size="26" placeholder="http://127.0.0.1:8000" autocomplete="off">
+                <span id="apiNoteIndicator" class="api-note-indicator" title="Current server note id" hidden></span>
+                <div class="menu-api-actions">
+                    <button type="button" class="menu-api-btn" id="apiSaveBtn" title="Save to server (API)">☁️ Save</button>
+                    <button type="button" class="menu-api-btn" id="apiOpenBtn" title="Open from server">📂 Open</button>
+                    <button type="button" class="menu-api-btn" id="apiNewBtn" title="New local note">📄 New</button>
+                </div>
             </div>
         </div>
     </div>
@@ -60,10 +66,6 @@
                         <button class="button" id="analyzeNotesBtn" title="Analyze notes with local LLM">🤖</button>
                         <button class="button" onclick="download()" title="Download notes">💾</button>
                         <button class="button" onclick="upload()" title="Upload notes">⬆️</button>
-                        <button type="button" class="button" id="apiSaveBtn" title="Save to server (API)">☁️</button>
-                        <button type="button" class="button" id="apiOpenBtn" title="Open from server">📂</button>
-                        <button type="button" class="button" id="apiNewBtn" title="New local note">📄</button>
-                        <span id="apiNoteIndicator" class="api-note-indicator" title="Current server note id" hidden></span>
                         <button class="button" onclick="noteInfo()" title="Note info">📝</button>
                     </div>
 
