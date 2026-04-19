@@ -1,10 +1,13 @@
-# Stage 1: Use Nginx as a static file server
 FROM nginx:alpine
 
-# Copy your frontend files into Nginx's default directory
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 COPY . /usr/share/nginx/html
+RUN rm -f /usr/share/nginx/html/nginx.conf
 
-# Expose port 80
+# Same-origin API base when UI is served from this container (see script.js getApiBase)
+RUN awk '/<head>/ { print; print "    <meta name=\"treenotes-api-base\" content=\"/api\">"; next } { print }' \
+    /usr/share/nginx/html/index.html > /tmp/tn_index.html \
+    && mv /tmp/tn_index.html /usr/share/nginx/html/index.html
+
 EXPOSE 80
-
-# Nginx runs automatically when container starts

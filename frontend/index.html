@@ -9,76 +9,126 @@
 </head>
 <body>
 
-    <table id="content">
-        <tr>
-            <td colspan="2" id="heading">
-                <div contenteditable="true">
-                    Enter your heading
+    <!-- Floating App Menu -->
+    <div id="appMenu">
+        <button type="button" id="menuIcon" class="menu-icon-btn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
+        <div id="menuPopup">
+            <p><strong>📘 TreeNotes Menu</strong></p>
+            <button id="toggleDarkMode">🌓 Toggle Dark Mode</button>
+            <button id="help">❓ Help</button>
+            <button id="about">ℹ️ About</button>
+            <div>
+                <label for="ollama-model">Ollama Model:</label>
+                <input type="text" id="ollama-model" value="llama3">
+            </div>
+            <div>
+                <input type="checkbox" id="framework-of-trust">
+                <label for="framework-of-trust">Framework of Trust</label>
+            </div>
+            <div class="menu-api-row">
+                <label for="api-base-url">API URL</label>
+                <input type="url" id="api-base-url" size="26" placeholder="http://127.0.0.1:8000" autocomplete="off">
+                <span id="apiNoteIndicator" class="api-note-indicator" title="Current server note id" hidden></span>
+                <div class="menu-api-actions">
+                    <button type="button" class="menu-api-btn" id="apiSaveBtn" title="Save to server (API)">☁️ Save</button>
+                    <button type="button" class="menu-api-btn" id="apiOpenBtn" title="Open from server">📂 Open</button>
+                    <button type="button" class="menu-api-btn" id="apiNewBtn" title="New local note">📄 New</button>
                 </div>
-            </td>
-        </tr>
-        <tr>
-            <td id="text">
-                <div class="container" contenteditable="true">
-                    <p>Text area....</p>
-                    <p>Lorem ipsum dolor sit amet consectetur adipisicing elit. Sunt culpa velit...</p>
-                </div>
-            </td>
-            <td id="tree">
-                <div class="container">
-                    <!-- Tool bar -->
-                    <div style="position: absolute; left: 0; top: 0; z-index: 10;">
-                        <button onclick="createNewBlock()">➕</button>
-                        <button title="Zoom In" onclick="zoom(1.1)">🔍</button>
-                        <button title="Zoom Out" onclick="zoom(0.9)">🔎</button>
-                        <button onclick="download()">💾</button>
-                        <button onclick="upload()">⬆️</button>
-                        <button onclick="ai()">✨</button>
-                    </div>
-
-                    <div id="zoom" class="zoom">
-                        <!-- Draggable divs -->
-                        <div id="boxes">
-                            <div id="1" class="box" contenteditable="true" style="background-color: #f1f1f1;">Seed</div>
-                        </div>
-
-                        <!-- SVG for drawing lines -->
-                        <svg id="lines" width="3000px" height="3000px">
-                        </svg>
-                    </div>
-                </div>
-            </td>
-        </tr>
-        <tr>
-            <td id="notes" colspan="2">
-                <div id="notesText" contenteditable="true">
-                </div>
-            </td>
-        </tr>
-    </table>
-
-    <!-- Tools Section -->
-
-    <!-- Box Toolbar -->
-    <div id="toolbar" class="toolbar">
-        <input id="boxColor" type="color" aria-label="Box Color">
-        <button id="addBox">+</button>
-        <button id="deleteBox">🗑️</button>
-        <div id="link" class="dropdown">
-            <button class="dropdown-button">🖇️</button>
-            <div class="dropdown-content">
             </div>
         </div>
     </div>
 
-    <!-- Text Toolbar -->
-    <div id="textToolbar" class="toolbar">
-        <input id="t_boxColor" type="color" value="#ffffff" aria-label="Highlight Color">
-        <select id="t_dropdown">
-            <!-- Options will be added dynamically -->
-        </select>
-        <button id="t_remove">-</button>
+    <div id="title-bar">
+        <h1>Tree Notes</h1>
+        <button id="fullscreen-btn">⛶</button>
+    </div>
+    <main id="cornellLayout">
+        <div id="heading" class="cornell-heading">
+            <div id="headingText" contenteditable="true" data-placeholder="Cornell Note Heading"></div>
+        </div>
+
+        <div class="cornell-body">
+            <section id="text" class="cornell-column cornell-column--cue">
+                <header class="column-title">Cue Column</header>
+                <div class="container" id="cueText" contenteditable="true" data-placeholder="Cue column data, key words, key questions"></div>
+            </section>
+
+            <div id="cornell-resizer"></div>
+
+            <section id="tree" class="cornell-column cornell-column--notes">
+                <div class="container">
+                    <div id="toolbarBar" class="notes-toolbar">
+                        <button class="button" onclick="createNewBlock()" title="Add box">➕</button>
+                        <button class="button" onclick="zoom(1.1)" title="Zoom in">🔍</button>
+                        <button class="button" onclick="zoom(0.9)" title="Zoom out">🔎</button>
+                        <button class="button" id="gridToggle" aria-pressed="false" title="Toggle guide grid">#️⃣</button>
+                        <button class="button" id="dictateToggle" aria-pressed="false" title="Toggle dictation">🎙️</button>
+                        <button class="button" id="analyzeNotesBtn" title="Analyze notes with local LLM">🤖</button>
+                        <button class="button" onclick="download()" title="Download notes">💾</button>
+                        <button class="button" onclick="upload()" title="Upload notes">⬆️</button>
+                        <button class="button" onclick="noteInfo()" title="Note info">📝</button>
+                    </div>
+
+                    <div id="statusMessage" class="status-message" aria-live="polite"></div>
+
+                    <div id="analysisPanel" class="analysis-panel" hidden>
+                        <div class="analysis-panel__header">
+                            <span>LLM Insights</span>
+                            <button type="button" id="closeAnalysis" class="analysis-panel__close" aria-label="Hide AI insights">✕</button>
+                        </div>
+                        <div id="analysisContent" class="analysis-panel__content"></div>
+                    </div>
+
+                    <div id="treeQuickMenu" class="tree-menu" role="menu" aria-hidden="true">
+                        <img src="logo/TreenotesICON.png" alt="Tree Notes menu icon" class="tree-menu__icon">
+                        <button type="button" class="tree-menu__item" data-action="info">Info</button>
+                        <button type="button" class="tree-menu__item" data-action="help">Help</button>
+                        <button type="button" class="tree-menu__item" data-action="dark">Toggle Dark Mode</button>
+                    </div>
+
+                    <div id="zoom" class="zoom">
+                        <div id="boxes">
+                            <div id="1" class="box" contenteditable="true" style="background-color: #f1f1f1;">Seed</div>
+                        </div>
+                        <svg id="lines" width="3000px" height="3000px"></svg>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div id="notes" class="cornell-summary">
+            <header class="column-title column-title--summary">Summary</header>
+            <div id="notesText" contenteditable="true" data-placeholder="Type your summary here..."></div>
+        </div>
+    </main>
+
+    <div id="toolbar" class="toolbar">
+        <input id="boxColor" type="color" aria-label="Box Color">
+        <button id="addBox">Add Box+</button>
+        <button id="deleteBox">Delete Box🗑️</button>
+        <div id="link" class="dropdown">
+            <button class="dropdown-button">Link 🖇️</button>
+            <div class="dropdown-content"></div>
+        </div>
     </div>
 
+
+    <dialog id="apiOpenDialog" class="api-open-dialog">
+        <div class="api-open-dialog__inner">
+            <header class="api-open-dialog__header">Open from server</header>
+            <p id="apiOpenError" class="api-open-dialog__error" hidden></p>
+            <ul id="apiOpenList" class="api-open-list"></ul>
+            <div class="api-open-dialog__actions">
+                <button type="button" id="apiOpenRefresh">Refresh</button>
+                <button type="button" id="apiOpenCancel">Close</button>
+            </div>
+        </div>
+    </dialog>
+
+    <div id="textToolbar" class="toolbar">
+        <input id="t_boxColor" type="color" value="#eeeeee" aria-label="Highlight Color">
+        <select id="t_dropdown"></select>
+        <button id="t_remove">-</button>
+    </div>
 </body>
 </html>

@@ -12,6 +12,10 @@ let bin = [];
 // Counter for the total number of boxes created. Used to assign unique IDs.
 let totalBoxes = 1;
 
+// Track auxiliary UI state such as the canvas grid visibility.
+let isGridActive = false;
+let isDictating = false;
+
 // Get the first DOM element with the class "box". This is likely the initial box.
 const seed = document.querySelectorAll(".box")[0];
 
@@ -50,7 +54,12 @@ boxes.set(seed.id, {
  */
 function zoom(times) {
     const canvas = document.getElementById("zoom");
-    const scale = (new DOMMatrix(canvas.style.transform)).a;
+    if (!canvas) return;
+
+    const transform = canvas.style.transform || "matrix(1, 0, 0, 1, 0, 0)";
+    const matrix = new DOMMatrix(transform);
+    const scale = matrix.a || 1;
+
     canvas.style.transform = `scale(${scale * times})`;
 }
 
@@ -120,12 +129,8 @@ function makeDraggable(box) {
 // Box Creation and Management
 // --------------------------------------------------------------------------
 
-/**
- * Adds a new block adjacent to the currently selected box and connects them with a line.
- * @param {HTMLElement} box - The reference box to which the new block will be connected.
- */
 function addBlock(box) {
-    [x1, y1] = getBoxCoords(box);
+    const [x1, y1] = getBoxCoords(box);
     const newBox = createNewBlock(x1, y1);
     newLine(box, newBox);
 }
@@ -135,32 +140,45 @@ function addBlock(box) {
  * @param {number} [x=0] - The initial x-coordinate (left position) of the new box.
  * @param {number} [y=20] - The initial y-coordinate (top position) of the new box.
  * @param {string} [content="New Box"] - The initial text content of the new box.
+ * @param {{id?: string|number}} [options={}] - Optional metadata (currently only supports an explicit id).
  * @returns {HTMLElement} The newly created box element.
  */
-function createNewBlock(x = 0, y = 20, content = "New Box") {
-    let newBox = document.createElement('div');
-    totalBoxes += 1;
-    newBox.id = totalBoxes;
+function createNewBlock(x = 0, y = 20, content = "New Box", options = {}) {
+    const { id: requestedId = null } = options;
+    const newBox = document.createElement('div');
+    const resolvedId = requestedId !== null ? String(requestedId) : String(++totalBoxes);
+
+    totalBoxes = Math.max(totalBoxes, Number(resolvedId));
+
+    newBox.id = resolvedId;
     newBox.className = "box";
     newBox.style.position = "absolute";
     newBox.style.left = `${x}px`;
     newBox.style.top = `${y}px`;
-    newBox.textContent = content;
-    newBox.contentEditable = true;
     newBox.style.backgroundColor = "#f1f1f1";
+    newBox.contentEditable = true;
+    newBox.textContent = content;
+
     const footer = document.createElement("h6");
-    footer.innerHTML = `#${totalBoxes}`;
+    footer.innerHTML = `#${resolvedId}`;
     footer.className = "boxFooter";
     newBox.appendChild(footer);
+
     document.getElementById("boxes").appendChild(newBox);
     makeDraggable(newBox);
     listenForImagePaste(newBox);
+
     boxes.set(newBox.id, {
         box: newBox,
         lines: []
     });
+
     return newBox;
 }
+
+// --------------------------------------------------------------------------
+// Box Lifecycle Helpers
+// --------------------------------------------------------------------------
 
 /**
  * Deletes a specified box and all the lines connected to it.
@@ -185,32 +203,35 @@ function deleteBox(box) {
  * @param {HTMLElement|string} box2 - The second box element or its ID.
  */
 function newLine(box1, box2) {
-    //console.log(box1);
-    if (!box1?.id) box1 = document.getElementById(box1);
-    if (!box2?.id) box2 = document.getElementById(box2);
-    const newLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    let id = "";
-    if (+box1.id < +box2.id) {
-        id = box1.id + "_" + box2.id;
-    } else {
-        id = box2.id + "_" + box1.id;
+    const firstBox = typeof box1 === "string" ? document.getElementById(box1) : box1;
+    const secondBox = typeof box2 === "string" ? document.getElementById(box2) : box2;
+
+    if (!firstBox || !secondBox) return;
+
+    const sortedIds = [firstBox.id, secondBox.id].sort((a, b) => Number(a) - Number(b));
+    const lineId = sortedIds.join("_");
+
+    if (document.getElementById(lineId)) return;
+
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("id", lineId);
+    line.setAttribute("class", "line");
+
+    const firstEntry = boxes.get(firstBox.id);
+    const secondEntry = boxes.get(secondBox.id);
+
+    if (firstEntry && !firstEntry.lines.includes(secondBox.id)) {
+        firstEntry.lines.push(secondBox.id);
     }
-    newLine.setAttribute('id', id);
 
-    // Add box ids to line lists
-    
-    const box1Lines = boxes.get(box1.id).lines;
-    if (!box1Lines.includes(box2.id)) box1Lines.push(box2.id);
+    if (secondEntry && !secondEntry.lines.includes(firstBox.id)) {
+        secondEntry.lines.push(firstBox.id);
+    }
 
-    const box2Lines = boxes.get(box2.id).lines;
-    if (!box2Lines.includes(box1.id)) box2Lines.push(box1.id);
-
-
-    newLine.setAttribute('class', 'line');
-    [x1, y1] = getBoxCoords(box1);
-    [x2, y2] = getBoxCoords(box2);
-    updateLinePosition(newLine, x1, y1, x2, y2);
-    document.getElementById("lines").appendChild(newLine);
+    const [x1, y1] = getBoxCoords(firstBox);
+    const [x2, y2] = getBoxCoords(secondBox);
+    updateLinePosition(line, x1, y1, x2, y2);
+    document.getElementById("lines").appendChild(line);
 }
 
 /**
@@ -218,17 +239,16 @@ function newLine(box1, box2) {
  * @param {HTMLElement} box - The box whose connected lines need to be updated.
  */
 function updateLinesPosition(box) {
-    const lines = document.querySelectorAll(".line");
-    lines.forEach((line) => {
-        let boxes = (line.id).split('_');
-        if (box.id == boxes[0]) {
-            [x1, y1] = getBoxCoords(box);
+    for (const line of document.querySelectorAll(".line")) {
+        const [startId, endId] = line.id.split("_");
+        if (box.id === startId) {
+            const [x1, y1] = getBoxCoords(box);
             updateLinePosition(line, x1, y1, false, false);
-        } else if (box.id == boxes[1]) {
-            [x2, y2] = getBoxCoords(box);
+        } else if (box.id === endId) {
+            const [x2, y2] = getBoxCoords(box);
             updateLinePosition(line, false, false, x2, y2);
         }
-    });
+    }
 }
 
 /**
@@ -237,9 +257,16 @@ function updateLinesPosition(box) {
  */
 function deleteLine(line) {
     const [a, b] = line.id.split("_");
-    boxes.values().forEach(item => {
-        item.lines = item.lines.filter(id => id!==a && id!==b)
-    });
+    const firstEntry = boxes.get(a);
+    const secondEntry = boxes.get(b);
+
+    if (firstEntry) {
+        firstEntry.lines = firstEntry.lines.filter(id => id !== b);
+    }
+    if (secondEntry) {
+        secondEntry.lines = secondEntry.lines.filter(id => id !== a);
+    }
+
     line.remove();
 }
 
@@ -249,17 +276,10 @@ function deleteLine(line) {
  * @returns {SVGLineElement[]} An array of SVG line elements connected to the box.
  */
 function getLinesAttached(box) {
-    let lines = document.querySelectorAll(".line");
-    lines = Array(...lines).filter(line => {
+    return Array.from(document.querySelectorAll(".line")).filter(line => {
         const [a, b] = line.id.split("_");
-        if (a == box.id) {
-            return true;
-        } else if (b == box.id) {
-            return true;
-        }
-        return false;
+        return a === box.id || b === box.id;
     });
-    return lines;
 }
 
 /**
@@ -282,11 +302,12 @@ function getBoxCoords(box) {
  * @param {number|boolean} [y2=false] - The new y2 coordinate, or false to not update.
  */
 function updateLinePosition(line, x1 = false, y1 = false, x2 = false, y2 = false) {
-    if (x1) line.setAttribute("x1", x1);
-    if (y1) line.setAttribute("y1", y1);
-    if (x2) line.setAttribute("x2", x2);
-    if (y2) line.setAttribute("y2", y2);
+    if (x1 !== false) line.setAttribute("x1", x1);
+    if (y1 !== false) line.setAttribute("y1", y1);
+    if (x2 !== false) line.setAttribute("x2", x2);
+    if (y2 !== false) line.setAttribute("y2", y2);
 }
+
 
 // --------------------------------------------------------------------------
 // Image Pasting Functionality
@@ -492,15 +513,19 @@ document.getElementById("text").addEventListener("contextmenu", (e) => {
 document.addEventListener('click', function (event) {
     const toolbar = document.getElementById('toolbar');
     const textToolbar = document.getElementById("textToolbar");
+    const treeMenu = document.getElementById("treeQuickMenu");
 
-    // Hide the box toolbar if the click is outside the "boxes" container
-    if (!event.target.closest('#boxes')) {
+    if (toolbar && !event.target.closest('#boxes')) {
         toolbar.style.display = 'none';
     }
 
-    // Hide the text toolbar if the click is outside the "textToolbar"
-    if (!event.target.closest("#textToolbar")) {
+    if (textToolbar && !event.target.closest("#textToolbar")) {
         textToolbar.style.display = 'none';
+    }
+
+    if (treeMenu && !event.target.closest('#treeQuickMenu') && !event.target.closest('#tree .container')) {
+        treeMenu.classList.remove('visible');
+        treeMenu.setAttribute('aria-hidden', 'true');
     }
 });
 
@@ -530,6 +555,7 @@ function boxToolbarListeners() {
         deleteBox(box);
     });
 }
+
 
 // --------------------------------------------------------------------------
 // Text Highlighting and Link Styling
@@ -563,64 +589,54 @@ function addGlow(span, color) {
 
 // Toggle the dropdown visibility when the button is hovered over
 document.querySelector(".dropdown-button").addEventListener('mouseover', e => {
-    const container = document.querySelector(".dropdown-content");
+    const dropdown = e.currentTarget.closest(".dropdown");
+    const container = dropdown.querySelector(".dropdown-content");
+    const toolbar = dropdown.closest(".toolbar");
+    const boxId = toolbar?.dataset.boxId;
+
+    if (!boxId || !boxes.has(boxId)) return;
+
     container.innerHTML = "";
-    const boxId = container.parentNode.parentNode.dataset.boxId;
-    const allIds = boxes.keys();
-    const conectedIds = [...boxes.get(boxId).lines];
 
+    const connectedIds = new Set((boxes.get(boxId)?.lines || []).map(String));
 
-    conectedIds.sort((a, b) => a - b);
+    Array.from(boxes.keys())
+        .filter(id => id !== boxId)
+        .sort((a, b) => Number(a) - Number(b))
+        .forEach(id => {
+            const item = document.createElement("div");
+            item.className = "dropdown-item";
 
-    allIds.forEach(l => {
-        let element = document.createElement("div");
-        element.className = "dropdown-item";
+            const lesser = String(Math.min(Number(boxId), Number(id)));
+            const greater = String(Math.max(Number(boxId), Number(id)));
+            const lineId = `${lesser}_${greater}`;
+            const isConnected = connectedIds.has(String(id));
 
-        // on click add/remove line
-        element.addEventListener("click", (e) => {
-            const a = e.target.dataset.a;
-            const b = e.target.dataset.b;
-            const c = e.target.dataset.c;
+            item.dataset.a = lesser;
+            item.dataset.b = greater;
+            item.dataset.c = isConnected ? "1" : "0";
+            item.textContent = `Box# ${id}${isConnected ? " ✅" : ""}`;
 
-            if (+c) {
-                deleteLine(document.getElementById(a + "_" + b));
-            } else {
-                newLine(a, b);
-            }
+            item.addEventListener("click", evt => {
+                const { a, b, c } = evt.currentTarget.dataset;
+                if (c === "1") {
+                    const existingLine = document.getElementById(`${a}_${b}`);
+                    if (existingLine) deleteLine(existingLine);
+                } else {
+                    newLine(a, b);
+                }
+            });
+
+            container.appendChild(item);
         });
 
-        if (l == boxId) return;
-        element.innerHTML = "Box# " + l;
-
-        if (+boxId < +l) {
-            // Add lines connecting box ids
-            element.dataset.a = boxId;
-            element.dataset.b = l;
-        } else {
-            // Add lines connecting box ids
-            element.dataset.a = l;
-            element.dataset.b = boxId;
-        }
-
-        // set connection status
-        element.dataset.c = 0;
-
-        conectedIds.forEach(e => {
-            if (l == e) {
-                element.innerHTML += " ✅";
-                conectedIds.shift();
-                // set connection status
-                element.dataset.c = 1;
-            }
-        });
-        container.appendChild(element);
-    });
-    e.target.parentNode.classList.add("show");
+    dropdown.classList.add("show");
 });
 
-document.querySelector("#link").addEventListener('mouseleave', e => {
-    e.target.classList.remove("show");
+document.getElementById("link").addEventListener('mouseleave', () => {
+    document.getElementById("link").classList.remove("show");
 });
+
 
 // --------------------------------------------------------------------------
 // Color Conversion Functions
@@ -633,21 +649,34 @@ document.querySelector("#link").addEventListener('mouseleave', e => {
  * @returns {string} The hexadecimal representation of the color.
  */
 function colorToHex(color) {
-    if (color.startsWith("#")) {
-        return color;
+    if (typeof color !== "string") {
+        return "#f1f1f1";
     }
-    if (color.startsWith("rgb")) {
-        let rgb = color.match(/rgb\(\s*(\d+),\s*(\d+),\s*(\d+)\s*\)/);
+
+    const normalized = color.trim();
+
+    if (!normalized) {
+        return "#f1f1f1";
+    }
+
+    if (normalized.startsWith("#")) {
+        return normalized.length === 4 || normalized.length === 7 ? normalized.toUpperCase() : "#f1f1f1";
+    }
+
+    if (normalized.startsWith("rgb")) {
+        const rgb = normalized.match(/rgb\(\s*(\d+),\s*(\d+),\s*(\d+)\s*\)/);
         if (rgb) {
-            return rgbToHex(parseInt(rgb[1]), parseInt(rgb[2]), parseInt(rgb[3]));
+            return rgbToHex(parseInt(rgb[1], 10), parseInt(rgb[2], 10), parseInt(rgb[3], 10));
         }
     }
-    if (color.startsWith("hsl")) {
-        let hsl = color.match(/hsl\(\s*(\d+),\s*(\d+)%,\s*(\d+)%\s*\)/);
+
+    if (normalized.startsWith("hsl")) {
+        const hsl = normalized.match(/hsl\(\s*(\d+),\s*(\d+)%,\s*(\d+)%\s*\)/);
         if (hsl) {
-            return hslToHex(parseInt(hsl[1]), parseInt(hsl[2]), parseInt(hsl[3]));
+            return hslToHex(parseInt(hsl[1], 10), parseInt(hsl[2], 10), parseInt(hsl[3], 10));
         }
     }
+
     console.warn("Invalid Color ", color);
     return "#f1f1f1";
 }
@@ -707,3 +736,846 @@ function hslToHex(h, s, l) {
     b = Math.round((b + m) * 255);
     return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1).toUpperCase()}`;
 }
+
+// --------------------------------------------------------------------------
+// Canvas Grid Toggle & Panning
+// --------------------------------------------------------------------------
+
+function toggleGrid(forceState = null, persist = true) {
+    const canvas = document.getElementById('zoom');
+    const toggleButton = document.getElementById('gridToggle');
+    if (!canvas || !toggleButton) return;
+
+    if (typeof forceState === 'boolean') {
+        isGridActive = forceState;
+    } else {
+        isGridActive = !isGridActive;
+    }
+
+    canvas.classList.toggle('grid-on', isGridActive);
+    toggleButton.classList.toggle('is-active', isGridActive);
+    toggleButton.setAttribute('aria-pressed', String(isGridActive));
+
+    if (persist) {
+        try {
+            localStorage.setItem('treenotes-grid', isGridActive ? 'true' : 'false');
+        } catch (error) {
+            console.warn('Unable to persist grid preference', error);
+        }
+    }
+}
+
+function initGridToggle() {
+    let savedState = null;
+    try {
+        savedState = localStorage.getItem('treenotes-grid');
+    } catch (error) {
+        savedState = null;
+    }
+
+    if (savedState === 'true' || savedState === 'false') {
+        toggleGrid(savedState === 'true', false);
+    } else {
+        toggleGrid(false, false);
+    }
+
+    const button = document.getElementById('gridToggle');
+    if (button) {
+        button.addEventListener('click', () => toggleGrid(null, true));
+    }
+}
+
+function initTreePanning() {
+    const container = document.querySelector('#tree .container');
+    if (!container) return;
+
+    let isPanning = false;
+    let panMoved = false;
+    let startX = 0;
+    let startY = 0;
+    let scrollLeft = 0;
+    let scrollTop = 0;
+
+    container.addEventListener('mousedown', event => {
+        if (event.button !== 0) return;
+        if (
+            event.target.closest('.box') ||
+            event.target.closest('#toolbarBar') ||
+            event.target.closest('#treeQuickMenu') ||
+            event.target.closest('.status-message') ||
+            event.target.closest('.analysis-panel')
+        ) {
+            return;
+        }
+
+        isPanning = true;
+        panMoved = false;
+        container.classList.add('is-panning');
+        startX = event.clientX;
+        startY = event.clientY;
+        scrollLeft = container.scrollLeft;
+        scrollTop = container.scrollTop;
+        event.preventDefault();
+    });
+
+    window.addEventListener('mousemove', event => {
+        if (!isPanning) return;
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+
+        if (!panMoved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+            panMoved = true;
+        }
+
+        container.scrollLeft = scrollLeft - dx;
+        container.scrollTop = scrollTop - dy;
+    });
+
+    const endPan = () => {
+        if (!isPanning) return;
+        isPanning = false;
+        container.classList.remove('is-panning');
+    };
+
+    window.addEventListener('mouseup', endPan);
+    window.addEventListener('blur', endPan);
+    container.addEventListener('mouseup', endPan);
+    container.addEventListener('mouseleave', endPan);
+
+    container.addEventListener('click', event => {
+        if (panMoved) {
+            panMoved = false;
+            event.stopPropagation();
+        }
+    }, true);
+}
+
+// --------------------------------------------------------------------------
+// Assistive Controls (Speech-to-Text & AI Analysis)
+// --------------------------------------------------------------------------
+
+function setStatusMessage(message = '', variant = 'info') {
+    const statusEl = document.getElementById('statusMessage');
+    if (!statusEl) return;
+
+    if (message) {
+        statusEl.textContent = message;
+        statusEl.classList.add('is-active');
+    } else {
+        statusEl.textContent = '';
+        statusEl.classList.remove('is-active');
+    }
+
+    if (variant === 'error') {
+        statusEl.classList.add('is-alert');
+    } else {
+        statusEl.classList.remove('is-alert');
+    }
+}
+
+function gatherCornellNotes() {
+    const boxesWrapper = document.getElementById('boxes');
+    let noteBody = '';
+
+    if (boxesWrapper) {
+        noteBody = Array.from(boxesWrapper.querySelectorAll('.box'))
+            .map(box => {
+                const id = box.id ? `#${box.id}` : '';
+                const text = box.cloneNode(true);
+                text.querySelector('.boxFooter')?.remove();
+                return `Box ${id}`.trim() + ': ' + text.textContent.trim();
+            })
+            .join('\n');
+    }
+
+    return {
+        heading: document.getElementById('headingText')?.innerText.trim() || '',
+        cues: document.getElementById('cueText')?.innerText.trim() || '',
+        notes: noteBody || document.getElementById('tree')?.innerText.trim() || '',
+        summary: document.getElementById('notesText')?.innerText.trim() || ''
+    };
+}
+
+async function analyzeNotesWithLLM() {
+    const analyzeBtn = document.getElementById('analyzeNotesBtn');
+    const panel = document.getElementById('analysisPanel');
+    const contentEl = document.getElementById('analysisContent');
+
+    if (!analyzeBtn || !panel || !contentEl) return;
+
+    const { heading, cues, notes, summary } = gatherCornellNotes();
+
+    const prompt = [
+        'You are an academic assistant analysing Cornell notes.',
+        'Review the provided sections (Heading, Cue column, Notes, Summary) and return:',
+        '- Three bullet-point insights that connect cues to notes.',
+        '- Any gaps or follow-up questions the student should address.',
+        '- One actionable recommendation to deepen understanding.',
+        '',
+        'Heading:',
+        heading || '(none)',
+        '',
+        'Cue Column:',
+        cues || '(empty)',
+        '',
+        'Notes Column:',
+        notes || '(empty)',
+        '',
+        'Summary:',
+        summary || '(empty)',
+        '',
+        'Respond concisely using Markdown bullets where appropriate.'
+    ].join('\n');
+
+    analyzeBtn.disabled = true;
+    analyzeBtn.classList.add('is-active');
+    panel.hidden = true;
+    contentEl.textContent = '';
+    setStatusMessage('Contacting local Ollama model...', 'info');
+
+    const model = localStorage.getItem('treenotes-ollama-model') || 'llama3';
+
+    try {
+        const response = await fetch('http://localhost:11434/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model,
+                prompt,
+                stream: true
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Model request failed (${response.status})`);
+        }
+
+        let aggregate = '';
+
+        if (response.body && response.body.getReader) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n').filter(Boolean);
+
+                for (const line of lines) {
+                    try {
+                        const parsed = JSON.parse(line);
+                        if (parsed.response) {
+                            aggregate += parsed.response;
+                            contentEl.textContent = aggregate;
+                        }
+                    } catch (error) {
+                        aggregate += line;
+                        contentEl.textContent = aggregate;
+                    }
+                }
+            }
+        } else {
+            const data = await response.json();
+            aggregate = data.response || '';
+            contentEl.textContent = aggregate;
+        }
+
+        aggregate = (aggregate || '').trim();
+
+        if (aggregate) {
+            panel.hidden = false;
+            contentEl.textContent = aggregate;
+            setStatusMessage('Analysis complete.', 'info');
+        } else {
+            setStatusMessage('Model returned no content.', 'error');
+        }
+    } catch (error) {
+        console.error('LLM analysis error:', error);
+        setStatusMessage('Unable to reach Ollama. Ensure it is running at http://localhost:11434.', 'error');
+    } finally {
+        analyzeBtn.disabled = false;
+        analyzeBtn.classList.remove('is-active');
+    }
+}
+
+function initToolbarAssistControls() {
+    const dictateButton = document.getElementById('dictateToggle');
+    const analyzeButton = document.getElementById('analyzeNotesBtn');
+    const closeAnalysis = document.getElementById('closeAnalysis');
+    const panel = document.getElementById('analysisPanel');
+    const contentEl = document.getElementById('analysisContent');
+
+    if (dictateButton) {
+        const updateButton = () => {
+            dictateButton.classList.toggle('is-active', isDictating);
+            dictateButton.setAttribute('aria-pressed', String(isDictating));
+        };
+
+        updateButton();
+
+        dictateButton.addEventListener('click', () => {
+            isDictating = !isDictating;
+            updateButton();
+            if (isDictating) {
+                setStatusMessage('Dictation placeholder active (integration pending).', 'info');
+            } else {
+                setStatusMessage('', 'info');
+            }
+        });
+    }
+
+    if (analyzeButton) {
+        analyzeButton.addEventListener('click', analyzeNotesWithLLM);
+    }
+
+    if (closeAnalysis && panel && contentEl) {
+        closeAnalysis.addEventListener('click', () => {
+            panel.hidden = true;
+            contentEl.textContent = '';
+            setStatusMessage('', 'info');
+        });
+    }
+
+    setStatusMessage('', 'info');
+}
+
+function noteInfo() {
+    const { heading, cues, notes, summary } = gatherCornellNotes();
+    alert(
+        [
+            heading ? `Heading: ${heading}` : 'Heading: (empty)',
+            cues ? `Cue items: ${cues}` : 'Cue items: (empty)',
+            notes ? `Notes: ${notes}` : 'Notes: (empty)',
+            summary ? `Summary: ${summary}` : 'Summary: (empty)'
+        ].join('\n\n')
+    );
+}
+
+// --------------------------------------------------------------------------
+// API (FastAPI backend)
+// --------------------------------------------------------------------------
+
+const TREENOTES_API_BASE_KEY = 'treenotes-api-base';
+const TREENOTES_NOTE_ID_KEY = 'treenotes-current-note-id';
+
+function getApiBase() {
+    const params = new URLSearchParams(location.search);
+    const fromQuery = params.get('api');
+    if (fromQuery) return fromQuery.replace(/\/$/, '');
+
+    const meta = document.querySelector('meta[name="treenotes-api-base"]');
+    if (meta?.content?.trim()) {
+        const c = meta.content.trim();
+        if (c.startsWith('/')) {
+            return `${location.origin}${c.replace(/\/$/, '')}`;
+        }
+        return c.replace(/\/$/, '');
+    }
+
+    const stored = localStorage.getItem(TREENOTES_API_BASE_KEY);
+    if (stored) return stored.replace(/\/$/, '');
+    if (typeof window.TREENOTES_API_BASE === 'string' && window.TREENOTES_API_BASE.trim()) {
+        return window.TREENOTES_API_BASE.trim().replace(/\/$/, '');
+    }
+    return 'http://127.0.0.1:8000';
+}
+
+let currentNoteId = sessionStorage.getItem(TREENOTES_NOTE_ID_KEY) || null;
+
+function setCurrentNoteId(id) {
+    currentNoteId = id || null;
+    if (id) sessionStorage.setItem(TREENOTES_NOTE_ID_KEY, id);
+    else sessionStorage.removeItem(TREENOTES_NOTE_ID_KEY);
+    updateApiNoteIndicator();
+}
+
+function updateApiNoteIndicator() {
+    const el = document.getElementById('apiNoteIndicator');
+    if (!el) return;
+    if (!currentNoteId) {
+        el.hidden = true;
+        el.textContent = '';
+        return;
+    }
+    el.hidden = false;
+    el.textContent = currentNoteId.slice(0, 8) + '…';
+    el.title = 'Server note: ' + currentNoteId;
+}
+
+function replaceUrlNoteParam(noteId) {
+    const url = new URL(location.href);
+    if (noteId) url.searchParams.set('note', noteId);
+    else url.searchParams.delete('note');
+    history.replaceState({}, '', url);
+}
+
+function collectNotebookPayload() {
+    return {
+        heading: document.getElementById("headingText").innerText.trim(),
+        cueText: document.getElementById("cueText").innerText.trim(),
+        summary: document.getElementById("notesText").innerText.trim(),
+        boxes: [...boxes.entries()].map(([id, { box, lines }]) => ({
+            id,
+            content: box.childNodes[0]?.textContent?.trim() || "",
+            style: {
+                left: box.style.left,
+                top: box.style.top,
+                backgroundColor: box.style.backgroundColor
+            },
+            lines: lines.map(String)
+        }))
+    };
+}
+
+function apiBodyFromCanvas() {
+    const raw = collectNotebookPayload();
+    return {
+        heading: raw.heading,
+        cueText: raw.cueText,
+        summary: raw.summary,
+        boxes: raw.boxes.map(b => ({
+            id: Number(b.id),
+            content: b.content,
+            style: {
+                left: b.style.left || '0px',
+                top: b.style.top || '20px',
+                backgroundColor: b.style.backgroundColor || null
+            },
+            lines: (b.lines || []).map(String)
+        }))
+    };
+}
+
+function applyImportedData(data) {
+    document.getElementById("headingText").innerText = data.heading || "";
+    document.getElementById("cueText").innerText = data.cueText || "";
+    document.getElementById("notesText").innerText = data.summary || "";
+    document.getElementById("boxes").innerHTML = '';
+    document.getElementById("lines").innerHTML = '';
+    boxes.clear();
+    totalBoxes = 0;
+
+    (data.boxes || []).forEach(({ id, content, style, lines }) => {
+        const left = parseInt(style?.left, 10) || 0;
+        const top = parseInt(style?.top, 10) || 0;
+        const newBox = createNewBlock(left, top, content, { id });
+
+        if (style?.backgroundColor) {
+            newBox.style.backgroundColor = style.backgroundColor;
+        }
+
+        const entry = boxes.get(newBox.id);
+        entry.lines = Array.isArray(lines) ? [...new Set(lines.map(String))] : [];
+    });
+
+    (data.boxes || []).forEach(({ id, lines }) => {
+        (lines || []).forEach(linkId => {
+            newLine(String(id), String(linkId));
+        });
+    });
+}
+
+async function saveNotebookToApi() {
+    const api = getApiBase();
+    const body = apiBodyFromCanvas();
+    setStatusMessage('Saving to server…', 'info');
+    try {
+        const url = currentNoteId
+            ? `${api}/notes/${encodeURIComponent(currentNoteId)}`
+            : `${api}/notes`;
+        const method = currentNoteId ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+            const t = await res.text();
+            throw new Error(t || res.statusText);
+        }
+        const doc = await res.json();
+        if (doc.id) {
+            setCurrentNoteId(doc.id);
+            replaceUrlNoteParam(doc.id);
+        }
+        setStatusMessage('Saved to server.', 'info');
+    } catch (e) {
+        setStatusMessage('Save failed: ' + (e.message || String(e)), 'error');
+    }
+}
+
+async function loadNotebookFromApiById(noteId) {
+    const api = getApiBase();
+    setStatusMessage('Loading from server…', 'info');
+    try {
+        const res = await fetch(`${api}/notes/${encodeURIComponent(noteId)}`);
+        if (res.status === 404) {
+            setCurrentNoteId(null);
+            replaceUrlNoteParam(null);
+            setStatusMessage('Note not found on server.', 'error');
+            return;
+        }
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        applyImportedData(data);
+        const nid = data.id || noteId;
+        setCurrentNoteId(nid);
+        replaceUrlNoteParam(nid);
+        setStatusMessage('Loaded from server.', 'info');
+    } catch (e) {
+        setStatusMessage('Load failed: ' + (e.message || String(e)), 'error');
+    }
+}
+
+async function fetchNotesListForDialog() {
+    const api = getApiBase();
+    const listEl = document.getElementById('apiOpenList');
+    const errEl = document.getElementById('apiOpenError');
+    if (errEl) {
+        errEl.hidden = true;
+        errEl.textContent = '';
+    }
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    try {
+        const res = await fetch(`${api}/notes`);
+        if (!res.ok) throw new Error(await res.text());
+        const rows = await res.json();
+        if (!rows.length) {
+            const li = document.createElement('li');
+            li.className = 'api-open-list__empty';
+            li.textContent = 'No notes yet.';
+            listEl.appendChild(li);
+            return;
+        }
+        rows.forEach(row => {
+            const li = document.createElement('li');
+            const btn = document.createElement('button');
+            const title = (row.heading || '(no title)').trim() || '(no title)';
+            const updated = row.updated_at ? new Date(row.updated_at).toLocaleString() : '';
+            btn.type = 'button';
+            btn.textContent = title + (updated ? ' — ' + updated : '');
+            btn.addEventListener('click', async () => {
+                document.getElementById('apiOpenDialog')?.close();
+                await loadNotebookFromApiById(row.id);
+            });
+            li.appendChild(btn);
+            listEl.appendChild(li);
+        });
+    } catch (e) {
+        if (errEl) {
+            errEl.textContent = e.message || String(e);
+            errEl.hidden = false;
+        }
+    }
+}
+
+function openApiNotesDialog() {
+    const dlg = document.getElementById('apiOpenDialog');
+    if (!dlg) return;
+    void fetchNotesListForDialog();
+    dlg.showModal();
+}
+
+function newBlankNotebook() {
+    document.getElementById("headingText").innerText = "";
+    document.getElementById("cueText").innerText = "";
+    document.getElementById("notesText").innerText = "";
+    document.getElementById("boxes").innerHTML = '';
+    document.getElementById("lines").innerHTML = '';
+    boxes.clear();
+    totalBoxes = 0;
+    createNewBlock(0, 20, "New Box", {});
+    setCurrentNoteId(null);
+    replaceUrlNoteParam(null);
+    setStatusMessage('New note (not saved to server yet).', 'info');
+}
+
+function initApiIntegration() {
+    const baseInput = document.getElementById('api-base-url');
+    if (baseInput) {
+        baseInput.value = localStorage.getItem(TREENOTES_API_BASE_KEY) || getApiBase();
+        baseInput.addEventListener('change', () => {
+            const v = baseInput.value.trim();
+            if (v) localStorage.setItem(TREENOTES_API_BASE_KEY, v.replace(/\/$/, ''));
+            else localStorage.removeItem(TREENOTES_API_BASE_KEY);
+        });
+    }
+
+    document.getElementById('apiSaveBtn')?.addEventListener('click', () => void saveNotebookToApi());
+    document.getElementById('apiOpenBtn')?.addEventListener('click', () => openApiNotesDialog());
+    document.getElementById('apiNewBtn')?.addEventListener('click', () => newBlankNotebook());
+    document.getElementById('apiOpenRefresh')?.addEventListener('click', () => void fetchNotesListForDialog());
+    document.getElementById('apiOpenCancel')?.addEventListener('click', () => {
+        document.getElementById('apiOpenDialog')?.close();
+    });
+
+    const params = new URLSearchParams(location.search);
+    const noteFromUrl = params.get('note');
+    if (noteFromUrl && /^[0-9a-f-]{36}$/i.test(noteFromUrl)) {
+        void loadNotebookFromApiById(noteFromUrl);
+    } else {
+        setCurrentNoteId(null);
+    }
+}
+
+// --------------------------------------------------------------------------
+// new additions
+// --------------------------------------------------------------------------
+
+ // --------------------------------------------------------------------------
+// Download Functionality
+// --------------------------------------------------------------------------
+function download() {
+    const data = collectNotebookPayload();
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "treenotes.json";
+    a.click();
+}
+
+// --------------------------------------------------------------------------
+// Upload Functionality
+// --------------------------------------------------------------------------
+function upload() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+
+    input.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = evt => {
+            const data = JSON.parse(evt.target.result);
+            applyImportedData(data);
+            setCurrentNoteId(null);
+            replaceUrlNoteParam(null);
+            setStatusMessage('Loaded from file.', 'info');
+        };
+
+        reader.readAsText(file);
+    };
+
+    input.click();
+}
+
+function toggleDarkMode() {
+    const isDarkMode = document.documentElement.dataset.theme === 'dark';
+    document.documentElement.dataset.theme = isDarkMode ? '' : 'dark';
+    localStorage.setItem('treenotes-theme', document.documentElement.dataset.theme);
+}
+
+(function applySavedTheme() {
+    const savedTheme = localStorage.getItem('treenotes-theme');
+    if (savedTheme) {
+        document.documentElement.dataset.theme = savedTheme;
+    }
+})();
+
+// --------------------------------------------------------------------------
+// placeholders and tree menu
+// --------------------------------------------------------------------------  
+function setupEditablePlaceholders() {
+    const editables = document.querySelectorAll('[contenteditable][data-placeholder]');
+
+    const syncState = (el) => {
+        const text = el.textContent.replace(/\u00A0/g, ' ').trim();
+        const isEmpty = text.length === 0;
+        el.classList.toggle('is-empty', isEmpty);
+        if (isEmpty && el.innerHTML !== '') {
+            el.innerHTML = '';
+        }
+    };
+
+    editables.forEach(el => {
+        syncState(el);
+
+        el.addEventListener('focus', () => {
+            if (el.classList.contains('is-empty')) {
+                el.innerHTML = '';
+                el.classList.remove('is-empty');
+            }
+        });
+
+        el.addEventListener('input', () => syncState(el));
+        el.addEventListener('blur', () => syncState(el));
+    });
+}
+
+function initTreeMenu() {
+    const treeContainer = document.querySelector('#tree .container');
+    const treeMenu = document.getElementById('treeQuickMenu');
+
+    if (!treeContainer || !treeMenu) return;
+
+    const hideMenu = () => {
+        treeMenu.classList.remove('visible');
+        treeMenu.setAttribute('aria-hidden', 'true');
+    };
+
+    treeContainer.addEventListener('click', event => {
+        if (event.target.closest('.box') || event.target.closest('#toolbarBar') || event.target.closest('#treeQuickMenu')) {
+            return;
+        }
+
+        const rect = treeContainer.getBoundingClientRect();
+        const x = event.clientX - rect.left + treeContainer.scrollLeft;
+        const y = event.clientY - rect.top + treeContainer.scrollTop;
+
+        treeMenu.classList.add('visible');
+        treeMenu.setAttribute('aria-hidden', 'false');
+        treeMenu.style.left = `${x}px`;
+        treeMenu.style.top = `${y}px`;
+
+        requestAnimationFrame(() => {
+            const menuWidth = treeMenu.offsetWidth;
+            const menuHeight = treeMenu.offsetHeight;
+            const maxLeft = treeContainer.scrollWidth - menuWidth - 12;
+            const maxTop = treeContainer.scrollHeight - menuHeight - 12;
+            const nextLeft = Math.max(12, Math.min(x, maxLeft));
+            const nextTop = Math.max(12, Math.min(y, maxTop));
+            treeMenu.style.left = `${nextLeft}px`;
+            treeMenu.style.top = `${nextTop}px`;
+        });
+    });
+
+    treeMenu.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button) return;
+
+        event.stopPropagation();
+        switch (button.dataset.action) {
+            case 'info':
+                if (typeof noteInfo === 'function') {
+                    noteInfo();
+                } else {
+                    alert('Coming soon!');
+                }
+                break;
+            case 'help':
+                alert('Coming soon!');
+                break;
+            case 'dark':
+                toggleDarkMode();
+                break;
+            default:
+                break;
+        }
+
+        hideMenu();
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            hideMenu();
+        }
+    });
+
+    hideMenu();
+}
+
+function initResizer() {
+    const resizer = document.getElementById('cornell-resizer');
+    const leftPanel = document.getElementById('text');
+    const rightPanel = document.getElementById('tree');
+
+    if (!resizer || !leftPanel || !rightPanel) return;
+
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        resizer.classList.add('is-resizing');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const startX = e.clientX;
+        const startWidthLeft = leftPanel.offsetWidth;
+        const startWidthRight = rightPanel.offsetWidth;
+
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+
+            const deltaX = e.clientX - startX;
+            const newWidthLeft = startWidthLeft + deltaX;
+            const newWidthRight = startWidthRight - deltaX;
+            
+            const totalWidth = leftPanel.parentElement.offsetWidth;
+            const leftPercentage = (newWidthLeft / totalWidth) * 100;
+            const rightPercentage = (newWidthRight / totalWidth) * 100;
+
+            leftPanel.style.flexBasis = `${leftPercentage}%`;
+            rightPanel.style.flexBasis = `${rightPercentage}%`;
+        };
+
+        const onMouseUp = () => {
+            if (!isResizing) return;
+            isResizing = false;
+            resizer.classList.remove('is-resizing');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    setupEditablePlaceholders();
+    initGridToggle();
+    initTreePanning();
+    initTreeMenu();
+    initToolbarAssistControls();
+    initResizer();
+    initApiIntegration();
+
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    if(fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                document.documentElement.requestFullscreen();
+            }
+        });
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+        if (document.fullscreenElement) {
+            fullscreenBtn.textContent = 'Exit Fullscreen';
+        } else {
+            fullscreenBtn.textContent = '⛶';
+        }
+    });
+
+    const menuIcon = document.getElementById('menuIcon');
+    const menuPopup = document.getElementById('menuPopup');
+
+    if (menuIcon && menuPopup) {
+        menuIcon.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const isHidden = menuPopup.style.display === 'none' || !menuPopup.style.display;
+            menuPopup.style.display = isHidden ? 'block' : 'none';
+        });
+
+        document.addEventListener('click', () => {
+            menuPopup.style.display = 'none';
+        });
+
+        menuPopup.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+
+        document.getElementById('toggleDarkMode').addEventListener('click', toggleDarkMode);
+        document.getElementById('help').addEventListener('click', () => alert('Coming soon!'));
+        document.getElementById('about').addEventListener('click', () => alert('Coming soon!'));
+    }
+});

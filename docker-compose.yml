@@ -1,29 +1,57 @@
-version: "3.9"
-services:
-  frontend:
-    build: ./frontend
-    ports:
-      - "8080:80"
-    depends_on:
-      - backend
+# TreeNotes local stack — web UI (nginx) + FastAPI API + PostgreSQL.
+#
+# Adjustments from a bare compose file:
+# - No top-level "version:" — modern Docker Compose (v2+) ignores it; see https://docs.docker.com/compose/compose-file/
+# - postgres:15-alpine — matches Postgres 15, smaller image than full debian variant
+# - healthcheck — so an API service can later use depends_on + condition: service_healthy
+# - env substitution — copy .env.example to .env and edit; keeps defaults out of committed secrets
+# - restart: unless-stopped — restarts after reboot without fighting "docker compose stop" as much as "always"
 
-  backend:
-    build: ./backend
+services:
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: treenotes_web
+    restart: unless-stopped
     ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://user:pass@db:5432/treenotes
+      - "${FRONTEND_PORT:-8080}:80"
     depends_on:
-      - db
+      - api
+
+  api:
+    build:
+      context: ./BackEnd
+      dockerfile: Dockerfile
+    container_name: treenotes_api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-treenotes}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://127.0.0.1:8080,http://localhost:8080}
+    depends_on:
+      db:
+        condition: service_healthy
 
   db:
-    image: postgres:15
+    image: postgres:15-alpine
+    container_name: treenotes_db
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-      POSTGRES_DB: treenotes
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-treenotes}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-treenotes}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   postgres_data:
