@@ -1,0 +1,37 @@
+{
+  "heading": "Colors and positions",
+  "cueText": "What connects these ideas?",
+  "summary": "A quick recap.",
+  "boxes": [
+    {
+      "id": 10,
+      "content": "Root",
+      "style": {
+        "left": "0px",
+        "top": "20px",
+        "backgroundColor": "rgb(241, 241, 241)"
+      },
+      "lines": ["11", "12"]
+    },
+    {
+      "id": 12,
+      "content": "Branch B",
+      "style": {
+        "left": "220px",
+        "top": "180px",
+        "backgroundColor": "#FFD966"
+      },
+      "lines": ["10", "11"]
+    },
+    {
+      "id": 11,
+      "content": "Branch A",
+      "style": {
+        "left": "120px",
+        "top": "100px",
+        "backgroundColor": "#9FC5E8"
+      },
+      "lines": ["10", "12"]
+    }
+  ]
+}

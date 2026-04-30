@@ -1,0 +1,27 @@
+{
+  "heading": "Linked boxes",
+  "cueText": "Cue items",
+  "summary": "Summary text",
+  "boxes": [
+    {
+      "id": "2",
+      "content": "Second box",
+      "style": {
+        "left": "30px",
+        "top": "40px",
+        "backgroundColor": null
+      },
+      "lines": ["1"]
+    },
+    {
+      "id": 1,
+      "content": "First box",
+      "style": {
+        "left": "10px",
+        "top": "20px",
+        "backgroundColor": "#F1F1F1"
+      },
+      "lines": ["2"]
+    }
+  ]
+}

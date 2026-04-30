@@ -1,0 +1,17 @@
+{
+  "heading": "",
+  "cueText": "",
+  "summary": "",
+  "boxes": [
+    {
+      "id": "1",
+      "content": "Seed",
+      "style": {
+        "left": "",
+        "top": "",
+        "backgroundColor": "rgb(241, 241, 241)"
+      },
+      "lines": []
+    }
+  ]
+}

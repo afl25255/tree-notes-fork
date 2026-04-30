@@ -1,9 +1,42 @@
+import json
+from pathlib import Path
 from uuid import UUID
 
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.models import NoteEdge
+
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+def _normalize_note_payload(payload: dict) -> dict:
+    """Normalize export payload for stable round-trip comparisons."""
+    out = dict(payload)
+    out.pop("id", None)  # server-generated
+
+    boxes = []
+    for b in out.get("boxes", []) or []:
+        b2 = dict(b)
+        b2["id"] = int(b2.get("id"))
+        style = dict(b2.get("style") or {})
+        b2["style"] = {
+            "left": style.get("left") or "0px",
+            "top": style.get("top") or "20px",
+            "backgroundColor": style.get("backgroundColor", None),
+        }
+        b2["lines"] = [str(x) for x in (b2.get("lines") or [])]
+        b2["lines"].sort(key=lambda x: int(x) if str(x).isdigit() else str(x))
+        boxes.append(b2)
+
+    boxes.sort(key=lambda x: x["id"])
+    out["boxes"] = boxes
+
+    out["heading"] = out.get("heading") or ""
+    out["cueText"] = out.get("cueText") or ""
+    out["summary"] = out.get("summary") or ""
+    return out
 
 
 def test_health(client: TestClient) -> None:
@@ -59,6 +92,27 @@ def test_note_crud_roundtrip(client: TestClient) -> None:
     assert r.status_code == 204
     r = client.get(f"/notes/{nid}")
     assert r.status_code == 404
+
+
+def test_note_roundtrip_matches_frontend_export_fixtures(client: TestClient) -> None:
+    fixture_paths = sorted(FIXTURES_DIR.glob("*.json"))
+    assert fixture_paths, "No fixtures found; expected tests/fixtures/*.json"
+
+    r = client.post("/notes", json={})
+    assert r.status_code == 201
+    nid = r.json()["id"]
+
+    for path in fixture_paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+
+        r = client.put(f"/notes/{nid}", json=payload)
+        assert r.status_code == 200, (path.name, r.text)
+
+        r = client.get(f"/notes/{nid}")
+        assert r.status_code == 200, (path.name, r.text)
+        exported = r.json()
+
+        assert _normalize_note_payload(exported) == _normalize_note_payload(payload), path.name
 
 
 def test_get_note_skips_orphan_edges(client: TestClient, engine) -> None:
