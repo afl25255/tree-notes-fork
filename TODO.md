@@ -1,15 +1,72 @@
-# TODO
+# Plan: Next Immediate Tasks
 
-## Next steps
+## 1) Backend (Person B)
 
-1. Move Ollama calls behind the backend instead of calling it directly from the browser.
-2. Add frontend tests for API-backed save/load; extend backend tests (e.g. Postgres in CI) as needed.
-3. Authentication and per-user notes when the product requires it.
+### Already finished
+- backend foundation
+- CRUD
+- DB schema
+- Docker stack
+- nginx proxy
+- tests
+- frontend integration
 
-## Done
+### Backend next steps (align with Month 2 → Month 3)
+- Finish enhanced CRUD
+  - Add missing fields (colors, positions, links) to fully match frontend JSON export
+  - Ensure round-trip save/load is 100% identical to frontend JSON format
+- Implement linking endpoints (match frontend drag-and-drop linking)
+  - `POST /links/create`
+  - `POST /links/delete`
+  - `GET /links/list?note_id=...`
+- Prepare backend for AI integration
+  - Placeholder endpoint: `POST /ai/analyze` (accept Cornell note structure; return dummy response for now)
+- Start planning semantic endpoints (Month 6; prepare early)
+  - `GET /semantic/search`
+  - `GET /semantic/suggest-links`
 
-- FastAPI Dockerfile and `api` service in `docker-compose.yml`
-- PostgreSQL schema (notes, boxes, edges) and Alembic migrations
-- Note CRUD aligned with the frontend JSON export shape
-- `pytest` coverage for health and note round-trip (SQLite in-memory)
-- Frontend: save/load via `/notes` (app menu ☁️ Save / 📂 Open / 📄 New), menu API URL, optional `?note=` and `?api=` query params; JSON file import/export retained
+## 2) AI Integration (Person C)
+
+### Context (already discussed)
+- Ollama is too heavy for Rex’s laptop
+- Gemini API is cheap + fast
+- Tool calling is possible
+
+### AI integration next steps
+- Define the AI service contract
+  - What does the frontend send?
+  - What does the backend return?
+  - What fields does the AI need? (title, cue text, boxes, links, summary)
+- Implement Gemini-based function calling prototype
+  - Extract concepts
+  - Suggest new links
+  - Summarize notes
+  - Provide cue-column questions
+- Create backend wrapper for AI
+  - Backend should call Gemini, not the browser (avoids CORS and hides API keys)
+- Plan for future semantic search
+  - Decide embedding strategy (Gemini embeddings or local vector DB)
+
+## 3) Database & DevOps (Person D)
+
+### Already
+- set up Postgres
+- added schema
+- added Alembic
+- added Docker stack
+- configured nginx
+- Railway subscription for CI/CD
+
+### Database & DevOps next steps
+- Finalize DB schema for nodes & links
+  - Ensure it matches frontend JSON exactly
+- Add constraints + indexes for fast graph queries
+- Prepare for semantic search (vector column later)
+- Set up CI/CD with GitHub Actions + Railway
+  - Auto-build Docker images
+  - Auto-run backend tests
+  - Auto-deploy API + DB migrations
+  - Auto-deploy frontend static files to Railway or a CDN
+- Add test Postgres in CI
+  - Run backend tests against a real Postgres instance
+  - Ensure migrations run cleanly
