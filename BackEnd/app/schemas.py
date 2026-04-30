@@ -10,6 +10,16 @@ class BoxStyle(BaseModel):
     top: str = "20px"
     backgroundColor: Optional[str] = None
 
+    @field_validator("left", "top", mode="before")
+    @classmethod
+    def coerce_empty_to_default(cls, v: Any, info):
+        # Frontend exports may contain empty strings for unset style fields.
+        if v is None:
+            return v
+        if isinstance(v, str) and not v.strip():
+            return "0px" if info.field_name == "left" else "20px"
+        return v
+
 
 class BoxInOut(BaseModel):
     """Matches frontend `download()` / `upload()` box objects."""
@@ -23,6 +33,17 @@ class BoxInOut(BaseModel):
     @classmethod
     def coerce_id(cls, v: Any) -> int:
         return int(v)
+
+    @field_validator("lines", mode="before")
+    @classmethod
+    def coerce_lines(cls, v: Any) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, (str, int)):
+            return [str(v)]
+        if isinstance(v, list):
+            return [str(x) for x in v]
+        return []
 
 
 class NoteDocument(BaseModel):
@@ -55,3 +76,15 @@ class NoteUpdate(BaseModel):
     cueText: str = ""
     summary: str = ""
     boxes: list[BoxInOut] = Field(default_factory=list)
+
+
+class LinkCreate(BaseModel):
+    note_id: UUID
+    a: int
+    b: int
+
+
+class LinkOut(BaseModel):
+    note_id: UUID
+    a: int
+    b: int
