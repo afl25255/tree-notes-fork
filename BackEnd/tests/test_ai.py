@@ -94,7 +94,7 @@ def test_ai_analyze_gemini_returns_structured_payload(
 
     monkeypatch.setattr(settings, "ai_provider", "gemini")
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
-    monkeypatch.setattr(settings, "gemini_model", "gemini-2.0-flash")
+    monkeypatch.setattr(settings, "gemini_model", "gemini-2.5-flash")
 
     model_json = json.dumps(
         {
