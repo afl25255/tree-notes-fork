@@ -33,7 +33,8 @@
 - Env: `AI_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` (see `.env.example` and `docker-compose.yml`)
 
 ### AI integration next steps
-- Wire **structured** outputs: populate `concepts` and `suggested_links` (e.g. JSON mode or tool calling) and surface them in the UI
+- ✅ Wire **structured** outputs: server populates `concepts` and `suggested_links` via Gemini JSON mode (`responseMimeType=application/json` + response schema) / Ollama `format: json`; suggested links are sanitized to existing box ids and deduped server-side
+- Surface `concepts` and `suggested_links` in the UI (panel + one-click "create link" action)
 - Implement Gemini-based **function calling** prototype (extract concepts, suggest links, cue questions) beyond a single markdown blob
 - Plan for future semantic search
   - Decide embedding strategy (Gemini embeddings or local vector DB)
