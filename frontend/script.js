@@ -1036,13 +1036,29 @@ function renderConceptsAndSuggestions(data) {
     }
 }
 
-function clearAnalysisPanel(panel, contentEl) {
-    if (panel) panel.hidden = true;
+function openInsightsPanel(panel) {
+    if (!panel) return;
+    panel.classList.add('is-open');
+    document.body.classList.add('has-insights');
+}
+
+function closeInsightsPanel(panel) {
+    if (!panel) return;
+    panel.classList.remove('is-open');
+    document.body.classList.remove('has-insights');
+}
+
+function resetAnalysisContent(contentEl) {
     if (contentEl) contentEl.innerHTML = '';
     const conceptsSection = document.getElementById('analysisConcepts');
     const suggestedSection = document.getElementById('analysisSuggested');
     if (conceptsSection) conceptsSection.hidden = true;
     if (suggestedSection) suggestedSection.hidden = true;
+}
+
+function clearAnalysisPanel(panel, contentEl) {
+    closeInsightsPanel(panel);
+    resetAnalysisContent(contentEl);
 }
 
 async function analyzeNotesWithLLM() {
@@ -1056,7 +1072,9 @@ async function analyzeNotesWithLLM() {
 
     analyzeBtn.disabled = true;
     analyzeBtn.classList.add('is-active');
-    clearAnalysisPanel(panel, contentEl);
+    // Wipe stale insights but keep the sidebar in whatever state the user
+    // left it (open / closed) — the success path will open it again.
+    resetAnalysisContent(contentEl);
     setStatusMessage('Calling analysis API…', 'info');
 
     const base = getApiBase();
@@ -1080,11 +1098,11 @@ async function analyzeNotesWithLLM() {
         const message = (data.message || '').trim();
 
         if (status === 'ok') {
-            panel.hidden = false;
             contentEl.innerHTML = analysis
                 ? renderSimpleMarkdown(analysis)
                 : '<p><em>The model returned no narrative summary, but you can still review the concepts and suggested links below.</em></p>';
             renderConceptsAndSuggestions(data);
+            openInsightsPanel(panel);
             setStatusMessage('Analysis complete.', 'info');
             return;
         }
@@ -1286,6 +1304,11 @@ function applyImportedData(data) {
     document.getElementById("headingText").innerText = data.heading || "";
     document.getElementById("cueText").innerText = data.cueText || "";
     document.getElementById("notesText").innerText = data.summary || "";
+    // Programmatic innerText assignments above don't fire `input`, so the
+    // placeholder system never re-evaluates whether the field is "empty".
+    // Recompute it explicitly so placeholder text stops rendering on top of
+    // the freshly imported content.
+    refreshPlaceholderState(['headingText', 'cueText', 'notesText']);
     document.getElementById("boxes").innerHTML = '';
     document.getElementById("lines").innerHTML = '';
     boxes.clear();
@@ -1417,6 +1440,7 @@ function newBlankNotebook() {
     document.getElementById("headingText").innerText = "";
     document.getElementById("cueText").innerText = "";
     document.getElementById("notesText").innerText = "";
+    refreshPlaceholderState(['headingText', 'cueText', 'notesText']);
     document.getElementById("boxes").innerHTML = '';
     document.getElementById("lines").innerHTML = '';
     boxes.clear();
@@ -1515,20 +1539,31 @@ function toggleDarkMode() {
 // --------------------------------------------------------------------------
 // placeholders and tree menu
 // --------------------------------------------------------------------------  
+function syncPlaceholderState(el) {
+    if (!el) return;
+    const text = el.textContent.replace(/\u00A0/g, ' ').trim();
+    const isEmpty = text.length === 0;
+    el.classList.toggle('is-empty', isEmpty);
+    if (isEmpty && el.innerHTML !== '') {
+        el.innerHTML = '';
+    }
+}
+
+// Call after programmatic innerText changes (e.g. importing JSON, clearing on
+// "New") — `input` only fires for real user typing, so without this the
+// placeholder ::before keeps rendering on top of the freshly assigned text.
+function refreshPlaceholderState(idsOrEls) {
+    if (!Array.isArray(idsOrEls)) idsOrEls = [idsOrEls];
+    idsOrEls.forEach(item => {
+        const el = typeof item === 'string' ? document.getElementById(item) : item;
+        syncPlaceholderState(el);
+    });
+}
+
 function setupEditablePlaceholders() {
     const editables = document.querySelectorAll('[contenteditable][data-placeholder]');
-
-    const syncState = (el) => {
-        const text = el.textContent.replace(/\u00A0/g, ' ').trim();
-        const isEmpty = text.length === 0;
-        el.classList.toggle('is-empty', isEmpty);
-        if (isEmpty && el.innerHTML !== '') {
-            el.innerHTML = '';
-        }
-    };
-
     editables.forEach(el => {
-        syncState(el);
+        syncPlaceholderState(el);
 
         el.addEventListener('focus', () => {
             if (el.classList.contains('is-empty')) {
@@ -1537,8 +1572,8 @@ function setupEditablePlaceholders() {
             }
         });
 
-        el.addEventListener('input', () => syncState(el));
-        el.addEventListener('blur', () => syncState(el));
+        el.addEventListener('input', () => syncPlaceholderState(el));
+        el.addEventListener('blur', () => syncPlaceholderState(el));
     });
 }
 
