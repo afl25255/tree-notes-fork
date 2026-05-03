@@ -1138,9 +1138,34 @@ function initToolbarAssistControls() {
     }
 
     if (closeAnalysis && panel && contentEl) {
-        closeAnalysis.addEventListener('click', () => {
+        closeAnalysis.addEventListener('click', (event) => {
+            event.stopPropagation();
             clearAnalysisPanel(panel, contentEl);
             setStatusMessage('', 'info');
+        });
+    }
+
+    // Make the LLM Insights header collapse/expand the body, and remember the
+    // user's preference between sessions so opening another note keeps the same
+    // layout. The close (✕) button stops propagation above so it never toggles.
+    const analysisHeader = document.getElementById('analysisHeader');
+    if (analysisHeader && panel) {
+        const STORAGE_KEY = 'treenotes-analysis-collapsed';
+        const apply = (collapsed) => {
+            panel.classList.toggle('is-collapsed', collapsed);
+            analysisHeader.setAttribute('aria-expanded', String(!collapsed));
+        };
+        try {
+            apply(localStorage.getItem(STORAGE_KEY) === '1');
+        } catch (_) {
+            // localStorage may be unavailable (private mode); default to expanded.
+            apply(false);
+        }
+        analysisHeader.addEventListener('click', (event) => {
+            if (event.target.closest('.analysis-panel__close')) return;
+            const next = !panel.classList.contains('is-collapsed');
+            apply(next);
+            try { localStorage.setItem(STORAGE_KEY, next ? '1' : '0'); } catch (_) {}
         });
     }
 

@@ -105,18 +105,21 @@
                     <div id="statusMessage" class="status-message" aria-live="polite"></div>
 
                     <div id="analysisPanel" class="analysis-panel" hidden>
-                        <div class="analysis-panel__header">
-                            <span>LLM Insights</span>
-                            <button type="button" id="closeAnalysis" class="analysis-panel__close" aria-label="Hide AI insights">✕</button>
-                        </div>
-                        <div id="analysisContent" class="analysis-panel__content"></div>
-                        <div id="analysisConcepts" class="analysis-panel__section" hidden>
-                            <h4 class="analysis-panel__section-title">Concepts</h4>
-                            <div id="conceptsList" class="concept-chips"></div>
-                        </div>
-                        <div id="analysisSuggested" class="analysis-panel__section" hidden>
-                            <h4 class="analysis-panel__section-title">Suggested links</h4>
-                            <ul id="suggestedLinksList" class="suggested-links"></ul>
+                        <button type="button" class="analysis-panel__header" id="analysisHeader" aria-expanded="true" aria-controls="analysisBody">
+                            <span class="analysis-panel__chevron" aria-hidden="true">▾</span>
+                            <span class="analysis-panel__title">LLM Insights</span>
+                            <span class="analysis-panel__close" id="closeAnalysis" role="button" tabindex="0" aria-label="Hide AI insights">✕</span>
+                        </button>
+                        <div class="analysis-panel__body" id="analysisBody">
+                            <div id="analysisContent" class="analysis-panel__content"></div>
+                            <div id="analysisConcepts" class="analysis-panel__section" hidden>
+                                <h4 class="analysis-panel__section-title">Concepts</h4>
+                                <div id="conceptsList" class="concept-chips"></div>
+                            </div>
+                            <div id="analysisSuggested" class="analysis-panel__section" hidden>
+                                <h4 class="analysis-panel__section-title">Suggested links</h4>
+                                <ul id="suggestedLinksList" class="suggested-links"></ul>
+                            </div>
                         </div>
                     </div>
 
