@@ -896,6 +896,152 @@ function gatherCornellNotes() {
     };
 }
 
+// --------------------------------------------------------------------------
+// LLM Insights — markdown renderer + concepts / suggested-links sections
+// --------------------------------------------------------------------------
+
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Tiny markdown subset: bullets (* or -), **bold**, *italic*, _italic_, `code`,
+// blank-line separated paragraphs. Enough for what Gemini emits in `analysis`.
+function renderInlineMarkdown(escaped) {
+    // Bold first so the leftover singles can be parsed as italics safely.
+    let out = escaped.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?=[^*\w]|$)/g, '$1<em>$2</em>');
+    out = out.replace(/(^|[^_\w])_([^_\s][^_]*?)_(?=[^_\w]|$)/g, '$1<em>$2</em>');
+    out = out.replace(/`([^`]+?)`/g, '<code>$1</code>');
+    return out;
+}
+
+function renderSimpleMarkdown(text) {
+    if (!text) return '';
+    const lines = text.replace(/\r\n/g, '\n').split('\n');
+    const html = [];
+    let listOpen = false;
+    let paragraphBuf = [];
+
+    const flushParagraph = () => {
+        if (!paragraphBuf.length) return;
+        const joined = paragraphBuf.join(' ').trim();
+        if (joined) {
+            html.push('<p>' + renderInlineMarkdown(escapeHtml(joined)) + '</p>');
+        }
+        paragraphBuf = [];
+    };
+
+    for (const raw of lines) {
+        const line = raw.trim();
+        const bullet = line.match(/^[\*\-]\s+(.*)$/);
+        if (bullet) {
+            flushParagraph();
+            if (!listOpen) { html.push('<ul>'); listOpen = true; }
+            html.push('<li>' + renderInlineMarkdown(escapeHtml(bullet[1])) + '</li>');
+        } else if (!line) {
+            if (listOpen) { html.push('</ul>'); listOpen = false; }
+            flushParagraph();
+        } else {
+            if (listOpen) { html.push('</ul>'); listOpen = false; }
+            paragraphBuf.push(line);
+        }
+    }
+
+    if (listOpen) html.push('</ul>');
+    flushParagraph();
+    return html.join('');
+}
+
+function renderConceptsAndSuggestions(data) {
+    const conceptsSection = document.getElementById('analysisConcepts');
+    const conceptsList = document.getElementById('conceptsList');
+    const suggestedSection = document.getElementById('analysisSuggested');
+    const suggestedList = document.getElementById('suggestedLinksList');
+    if (!conceptsSection || !conceptsList || !suggestedSection || !suggestedList) return;
+
+    const concepts = Array.isArray(data.concepts)
+        ? data.concepts.filter(s => typeof s === 'string' && s.trim())
+        : [];
+    const rawLinks = Array.isArray(data.suggested_links) ? data.suggested_links : [];
+
+    conceptsList.innerHTML = '';
+    if (concepts.length) {
+        for (const c of concepts) {
+            const chip = document.createElement('span');
+            chip.className = 'concept-chip';
+            chip.textContent = c;
+            conceptsList.appendChild(chip);
+        }
+        conceptsSection.hidden = false;
+    } else {
+        conceptsSection.hidden = true;
+    }
+
+    suggestedList.innerHTML = '';
+    // Drop suggestions that point at boxes the user has since renamed/removed,
+    // and self-links that the server's sanitizer somehow let through.
+    const validLinks = rawLinks.filter(l => {
+        const a = String(l?.a ?? '');
+        const b = String(l?.b ?? '');
+        return a && b && a !== b && boxes.has(a) && boxes.has(b);
+    });
+
+    if (validLinks.length) {
+        for (const link of validLinks) {
+            const a = String(link.a);
+            const b = String(link.b);
+            const lo = String(Math.min(Number(a), Number(b)));
+            const hi = String(Math.max(Number(a), Number(b)));
+            const lineId = `${lo}_${hi}`;
+            const alreadyLinked = !!document.getElementById(lineId);
+
+            const item = document.createElement('li');
+            item.className = 'suggested-link-item';
+
+            const label = document.createElement('span');
+            label.className = 'suggested-link-item__label';
+            label.textContent = `Box ${lo} ↔ Box ${hi}`;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'suggested-link-item__btn';
+            if (alreadyLinked) {
+                btn.textContent = 'Linked ✓';
+                btn.disabled = true;
+            } else {
+                btn.textContent = '+ Create';
+                btn.addEventListener('click', () => {
+                    // Client-side only — same flow as the box quick-toolbar Link
+                    // dropdown. Persist server-side via the existing Save button.
+                    newLine(lo, hi);
+                    btn.textContent = 'Linked ✓';
+                    btn.disabled = true;
+                });
+            }
+
+            item.append(label, btn);
+            suggestedList.appendChild(item);
+        }
+        suggestedSection.hidden = false;
+    } else {
+        suggestedSection.hidden = true;
+    }
+}
+
+function clearAnalysisPanel(panel, contentEl) {
+    if (panel) panel.hidden = true;
+    if (contentEl) contentEl.innerHTML = '';
+    const conceptsSection = document.getElementById('analysisConcepts');
+    const suggestedSection = document.getElementById('analysisSuggested');
+    if (conceptsSection) conceptsSection.hidden = true;
+    if (suggestedSection) suggestedSection.hidden = true;
+}
+
 async function analyzeNotesWithLLM() {
     const analyzeBtn = document.getElementById('analyzeNotesBtn');
     const panel = document.getElementById('analysisPanel');
@@ -907,8 +1053,7 @@ async function analyzeNotesWithLLM() {
 
     analyzeBtn.disabled = true;
     analyzeBtn.classList.add('is-active');
-    panel.hidden = true;
-    contentEl.textContent = '';
+    clearAnalysisPanel(panel, contentEl);
     setStatusMessage('Calling analysis API…', 'info');
 
     const base = getApiBase();
@@ -931,9 +1076,12 @@ async function analyzeNotesWithLLM() {
         const analysis = (data.analysis || '').trim();
         const message = (data.message || '').trim();
 
-        if (status === 'ok' && analysis) {
+        if (status === 'ok') {
             panel.hidden = false;
-            contentEl.textContent = analysis;
+            contentEl.innerHTML = analysis
+                ? renderSimpleMarkdown(analysis)
+                : '<p><em>The model returned no narrative summary, but you can still review the concepts and suggested links below.</em></p>';
+            renderConceptsAndSuggestions(data);
             setStatusMessage('Analysis complete.', 'info');
             return;
         }
@@ -991,8 +1139,7 @@ function initToolbarAssistControls() {
 
     if (closeAnalysis && panel && contentEl) {
         closeAnalysis.addEventListener('click', () => {
-            panel.hidden = true;
-            contentEl.textContent = '';
+            clearAnalysisPanel(panel, contentEl);
             setStatusMessage('', 'info');
         });
     }
