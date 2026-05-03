@@ -69,14 +69,22 @@ body {
 #fullscreen-btn {
     background: transparent;
     border: none;
-    font-size: 1.5rem;
+    font-size: 1.4rem;
+    line-height: 1;
     cursor: pointer;
     position: absolute;
-    right: 20px;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 6px 8px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
 #fullscreen-btn:hover {
-    color: var(--accent-blue-start);
+    color: var(--accent-blue-end);
+    background: var(--surface-muted);
 }
 
 #appMenu {
@@ -115,25 +123,134 @@ body {
 #menuPopup {
     display: none;
     position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: 280px;
+    max-width: calc(100vw - 24px);
     background: var(--surface);
+    color: var(--text-primary);
     border: 1px solid var(--surface-strong);
-    border-radius: 5px;
-    padding: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
 }
 
-#menuPopup button {
-    display: block;
+.menu-header {
+    margin: 0 0 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.menu-divider {
+    border: 0;
+    border-top: 1px solid var(--surface-strong);
+    margin: 12px -4px;
+}
+
+.menu-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.menu-section--actions {
+    gap: 4px;
+}
+
+.menu-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
-    padding: 8px 12px;
+    padding: 8px 10px;
     text-align: left;
-    border: none;
+    border: 1px solid transparent;
+    border-radius: 10px;
     background: transparent;
+    color: inherit;
+    font: inherit;
     cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-#menuPopup button:hover {
+.menu-action-btn:hover {
     background: var(--surface-muted);
+    border-color: var(--surface-strong);
+}
+
+.menu-action-btn__icon {
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.menu-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+}
+
+.menu-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid var(--surface-strong);
+    border-radius: 8px;
+    background: var(--surface);
+    color: inherit;
+    font: inherit;
+    font-size: 0.9rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.menu-input:focus {
+    outline: none;
+    border-color: var(--accent-blue-end);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+.menu-hint {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.menu-hint code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--surface-muted);
+}
+
+.menu-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.menu-toggle input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--accent-blue-end);
+}
+
+[data-theme="dark"] .menu-action-btn:hover {
+    background: rgba(148, 163, 184, 0.12);
+    border-color: rgba(148, 163, 184, 0.3);
+}
+
+[data-theme="dark"] .menu-input {
+    background: var(--surface-muted);
+    border-color: rgba(148, 163, 184, 0.3);
 }
 
 #cornellLayout {
@@ -499,8 +616,9 @@ body {
 
 .button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
-    background: #ffffff;
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+    background: var(--surface);
+    outline: 1px solid rgba(15, 23, 42, 0.06);
 }
 
 .button.is-active,
@@ -714,58 +832,39 @@ body {
     }
 }
 
-.menu-api-row {
-    margin-top: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.menu-api-row label {
-    font-size: 0.85rem;
-}
-
-.menu-api-row input[type="url"] {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 6px 8px;
-    border: 1px solid var(--surface-strong);
-    border-radius: 4px;
-    background: var(--surface);
-    color: inherit;
-}
-
 .menu-api-actions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .menu-api-btn {
-    flex: 1 1 auto;
     min-width: 0;
-    padding: 8px 10px;
+    padding: 8px 6px;
     border: 1px solid var(--surface-strong);
     border-radius: 8px;
     background: var(--surface-muted, #f1f5f9);
     color: inherit;
-    font-size: 0.9rem;
+    font: inherit;
+    font-size: 0.85rem;
     cursor: pointer;
     text-align: center;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .menu-api-btn:hover {
     background: var(--surface-strong);
+    transform: translateY(-1px);
 }
 
 [data-theme="dark"] .menu-api-btn {
     background: var(--surface-strong);
-    border-color: #475569;
+    border-color: rgba(148, 163, 184, 0.3);
 }
 
 [data-theme="dark"] .menu-api-btn:hover {
-    background: #4b4b4b;
+    background: rgba(148, 163, 184, 0.18);
 }
 
 .api-note-indicator {

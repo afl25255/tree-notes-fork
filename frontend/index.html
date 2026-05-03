@@ -13,28 +13,58 @@
     <div id="appMenu">
         <button type="button" id="menuIcon" class="menu-icon-btn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
         <div id="menuPopup">
-            <p><strong>📘 TreeNotes Menu</strong></p>
-            <button id="toggleDarkMode">🌓 Toggle Dark Mode</button>
-            <button id="help">❓ Help</button>
-            <button id="about">ℹ️ About</button>
-            <div>
-                <label for="ollama-model">Ollama model (only if API uses <code>AI_PROVIDER=ollama</code>):</label>
-                <input type="text" id="ollama-model" value="llama3" title="Server reads OLLAMA_MODEL from env; this field is reserved for future UI wiring.">
-            </div>
-            <div>
-                <input type="checkbox" id="framework-of-trust">
-                <label for="framework-of-trust">Framework of Trust</label>
-            </div>
-            <div class="menu-api-row">
-                <label for="api-base-url">API URL</label>
-                <input type="url" id="api-base-url" size="26" placeholder="http://127.0.0.1:8000" autocomplete="off">
+            <header class="menu-header">📘 TreeNotes</header>
+
+            <section class="menu-section menu-section--actions">
+                <button type="button" class="menu-action-btn" id="toggleDarkMode">
+                    <span class="menu-action-btn__icon" aria-hidden="true">🌓</span>
+                    <span>Toggle Dark Mode</span>
+                </button>
+                <button type="button" class="menu-action-btn" id="help">
+                    <span class="menu-action-btn__icon" aria-hidden="true">❓</span>
+                    <span>Help</span>
+                </button>
+                <button type="button" class="menu-action-btn" id="about">
+                    <span class="menu-action-btn__icon" aria-hidden="true">ℹ️</span>
+                    <span>About</span>
+                </button>
+            </section>
+
+            <hr class="menu-divider" />
+
+            <section class="menu-section menu-section--field">
+                <label class="menu-label" for="ollama-model">Ollama model</label>
+                <input type="text" class="menu-input" id="ollama-model" value="llama3"
+                       title="Server reads OLLAMA_MODEL from env; this field is reserved for future UI wiring.">
+                <p class="menu-hint">Used only when the server runs with <code>AI_PROVIDER=ollama</code>.</p>
+            </section>
+
+            <section class="menu-section menu-section--toggle">
+                <label class="menu-toggle">
+                    <input type="checkbox" id="framework-of-trust">
+                    <span>Framework of Trust</span>
+                </label>
+            </section>
+
+            <hr class="menu-divider" />
+
+            <section class="menu-section menu-section--field menu-api-row">
+                <label class="menu-label" for="api-base-url">API URL</label>
+                <input type="url" class="menu-input" id="api-base-url"
+                       placeholder="http://127.0.0.1:8000" autocomplete="off">
                 <span id="apiNoteIndicator" class="api-note-indicator" title="Current server note id" hidden></span>
                 <div class="menu-api-actions">
-                    <button type="button" class="menu-api-btn" id="apiSaveBtn" title="Save to server (API)">☁️ Save</button>
-                    <button type="button" class="menu-api-btn" id="apiOpenBtn" title="Open from server">📂 Open</button>
-                    <button type="button" class="menu-api-btn" id="apiNewBtn" title="New local note">📄 New</button>
+                    <button type="button" class="menu-api-btn" id="apiSaveBtn" title="Save to server (API)">
+                        <span aria-hidden="true">☁️</span> Save
+                    </button>
+                    <button type="button" class="menu-api-btn" id="apiOpenBtn" title="Open from server">
+                        <span aria-hidden="true">📂</span> Open
+                    </button>
+                    <button type="button" class="menu-api-btn" id="apiNewBtn" title="New local note">
+                        <span aria-hidden="true">📄</span> New
+                    </button>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 
