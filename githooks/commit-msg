@@ -1,0 +1,6 @@
+#!/bin/sh
+# Drop Cursor co-author trailer (Cursor may inject it when creating commits).
+# Enable once: git config core.hooksPath githooks
+msg="$1"
+tmp="${msg}.stripcursor.$$"
+grep -v "Co-authored-by: Cursor" "$msg" > "$tmp" && mv "$tmp" "$msg"
