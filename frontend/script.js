@@ -76,17 +76,17 @@ function makeDraggable(box) {
     let isDragging = false;
     let offsetX, offsetY;
 
-    // Event listener for when the box loses focus (blur event).
-    // Resets the box height and updates connected lines.
+    // Update the SVG link endpoints whenever the box loses focus — its height
+    // may have changed because the user just typed into it. We deliberately
+    // do NOT collapse the height here (the previous "height = 7px" on blur
+    // hid most of the content and made boxes look broken).
     box.addEventListener("blur", () => {
-        box.style.height = "7px";
         updateLinesPosition(box);
     });
 
     // Event listener for when the box is clicked.
     // Shows the toolbar associated with the clicked box.
     box.addEventListener("click", () => {
-        box.style.height = "fit-content";
         const toolbar = document.getElementById('toolbar');
         const rect = box.getBoundingClientRect();
         toolbar.style.left = rect.right + 'px';
