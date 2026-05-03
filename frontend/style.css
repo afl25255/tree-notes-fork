@@ -521,9 +521,12 @@ body {
     transform-origin: left bottom;
     transition: transform 0.3s ease-in-out;
     position: relative;
-    min-width: 1800px;
-    min-height: 1200px;
+    /* Fill the visible notes area, but no longer balloon to 1800x1200 — boxes stay
+       in view and the SVG layer (which we size at 100% below) is never empty.        */
+    min-width: 100%;
+    min-height: 100%;
     background-color: var(--surface);
+    isolation: isolate;
 }
 
 .zoom.grid-on {
@@ -569,6 +572,7 @@ body {
     min-width: 160px;
     left: 120px;
     top: 120px;
+    z-index: 2;
     transition: box-shadow 0.25s ease, transform 0.25s ease;
     outline: none;
     overflow: hidden;
@@ -597,7 +601,20 @@ body {
     position: absolute;
     top: 0;
     left: 0;
-    z-index: -1;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.line {
+    stroke-width: 2;
+    stroke: #64748b;
+}
+
+[data-theme="dark"] .line {
+    stroke: #94a3b8;
 }
 
 .button {
@@ -753,11 +770,6 @@ body {
 .highlight {
     cursor: pointer;
     border-radius: 25%;
-}
-
-.line {
-    stroke-width: 2;
-    stroke: gray;
 }
 
 [contenteditable][data-placeholder] {
