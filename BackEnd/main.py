@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.routers.ai import router as ai_router
 from app.routers.links import router as links_router
 from app.routers.notes import router as notes_router
 
@@ -25,6 +26,7 @@ app.add_middleware(
 
 app.include_router(notes_router)
 app.include_router(links_router)
+app.include_router(ai_router)
 
 
 @app.get("/")

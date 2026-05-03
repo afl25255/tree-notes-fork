@@ -903,96 +903,56 @@ async function analyzeNotesWithLLM() {
 
     if (!analyzeBtn || !panel || !contentEl) return;
 
-    const { heading, cues, notes, summary } = gatherCornellNotes();
-
-    const prompt = [
-        'You are an academic assistant analysing Cornell notes.',
-        'Review the provided sections (Heading, Cue column, Notes, Summary) and return:',
-        '- Three bullet-point insights that connect cues to notes.',
-        '- Any gaps or follow-up questions the student should address.',
-        '- One actionable recommendation to deepen understanding.',
-        '',
-        'Heading:',
-        heading || '(none)',
-        '',
-        'Cue Column:',
-        cues || '(empty)',
-        '',
-        'Notes Column:',
-        notes || '(empty)',
-        '',
-        'Summary:',
-        summary || '(empty)',
-        '',
-        'Respond concisely using Markdown bullets where appropriate.'
-    ].join('\n');
+    const body = apiBodyFromCanvas();
 
     analyzeBtn.disabled = true;
     analyzeBtn.classList.add('is-active');
     panel.hidden = true;
     contentEl.textContent = '';
-    setStatusMessage('Contacting local Ollama model...', 'info');
+    setStatusMessage('Calling analysis API…', 'info');
 
-    const model = localStorage.getItem('treenotes-ollama-model') || 'llama3';
+    const base = getApiBase();
+    const url = `${base}/ai/analyze`;
 
     try {
-        const response = await fetch('http://localhost:11434/api/generate', {
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model,
-                prompt,
-                stream: true
-            })
+            body: JSON.stringify(body)
         });
 
         if (!response.ok) {
-            throw new Error(`Model request failed (${response.status})`);
+            const errText = await response.text().catch(() => '');
+            throw new Error(errText || `HTTP ${response.status}`);
         }
 
-        let aggregate = '';
+        const data = await response.json();
+        const status = data.status;
+        const analysis = (data.analysis || '').trim();
+        const message = (data.message || '').trim();
 
-        if (response.body && response.body.getReader) {
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split('\n').filter(Boolean);
-
-                for (const line of lines) {
-                    try {
-                        const parsed = JSON.parse(line);
-                        if (parsed.response) {
-                            aggregate += parsed.response;
-                            contentEl.textContent = aggregate;
-                        }
-                    } catch (error) {
-                        aggregate += line;
-                        contentEl.textContent = aggregate;
-                    }
-                }
-            }
-        } else {
-            const data = await response.json();
-            aggregate = data.response || '';
-            contentEl.textContent = aggregate;
-        }
-
-        aggregate = (aggregate || '').trim();
-
-        if (aggregate) {
+        if (status === 'ok' && analysis) {
             panel.hidden = false;
-            contentEl.textContent = aggregate;
+            contentEl.textContent = analysis;
             setStatusMessage('Analysis complete.', 'info');
-        } else {
-            setStatusMessage('Model returned no content.', 'error');
+            return;
         }
+
+        if (status === 'placeholder') {
+            setStatusMessage(
+                message || 'Server AI is off. Add GEMINI_API_KEY (or set AI_PROVIDER) on the API host, then retry.',
+                'error'
+            );
+            return;
+        }
+
+        setStatusMessage(message || 'Analysis failed.', 'error');
     } catch (error) {
         console.error('LLM analysis error:', error);
-        setStatusMessage('Unable to reach Ollama. Ensure it is running at http://localhost:11434.', 'error');
+        setStatusMessage(
+            `Could not reach ${url}. Check API URL in the menu and that the backend is running.`,
+            'error'
+        );
     } finally {
         analyzeBtn.disabled = false;
         analyzeBtn.classList.remove('is-active');

@@ -10,17 +10,11 @@
 - nginx proxy
 - tests
 - frontend integration
+- enhanced CRUD aligned with frontend JSON (heading, cueText, summary, boxes with style + lines); round-trip covered by API tests and fixtures
+- linking endpoints: `POST /links/create`, `POST /links/delete`, `GET /links/list?note_id=...`
+- **`POST /ai/analyze`**: Cornell-shaped body; server-side **Gemini** (when `GEMINI_API_KEY` + `AI_PROVIDER=auto|gemini`) or **Ollama** (`AI_PROVIDER=ollama`); **placeholder** when no key; frontend calls API only (keys stay on server)
 
 ### Backend next steps (align with Month 2 → Month 3)
-- Finish enhanced CRUD
-  - Add missing fields (colors, positions, links) to fully match frontend JSON export
-  - Ensure round-trip save/load is 100% identical to frontend JSON format
-- Implement linking endpoints (match frontend drag-and-drop linking)
-  - `POST /links/create`
-  - `POST /links/delete`
-  - `GET /links/list?note_id=...`
-- Prepare backend for AI integration
-  - Placeholder endpoint: `POST /ai/analyze` (accept Cornell note structure; return dummy response for now)
 - Start planning semantic endpoints (Month 6; prepare early)
   - `GET /semantic/search`
   - `GET /semantic/suggest-links`
@@ -32,18 +26,15 @@
 - Gemini API is cheap + fast
 - Tool calling is possible
 
+### Already finished (baseline)
+- Backend calls **Gemini** (or **Ollama** on the server) for analyze; browser does not hold API keys
+- Baseline contract: request matches note export / `NoteUpdate`; response includes `status`, `message`, **`analysis`** (markdown for the insights panel), plus `concepts` and `suggested_links` (reserved for structured use later)
+- UI **Analyze** button uses `POST {API}/ai/analyze` with `apiBodyFromCanvas()`
+- Env: `AI_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` (see `.env.example` and `docker-compose.yml`)
+
 ### AI integration next steps
-- Define the AI service contract
-  - What does the frontend send?
-  - What does the backend return?
-  - What fields does the AI need? (title, cue text, boxes, links, summary)
-- Implement Gemini-based function calling prototype
-  - Extract concepts
-  - Suggest new links
-  - Summarize notes
-  - Provide cue-column questions
-- Create backend wrapper for AI
-  - Backend should call Gemini, not the browser (avoids CORS and hides API keys)
+- Wire **structured** outputs: populate `concepts` and `suggested_links` (e.g. JSON mode or tool calling) and surface them in the UI
+- Implement Gemini-based **function calling** prototype (extract concepts, suggest links, cue questions) beyond a single markdown blob
 - Plan for future semantic search
   - Decide embedding strategy (Gemini embeddings or local vector DB)
 
@@ -59,7 +50,7 @@
 
 ### Database & DevOps next steps
 - Finalize DB schema for nodes & links
-  - Ensure it matches frontend JSON exactly
+  - Ensure it matches frontend JSON exactly (re-verify after any frontend export changes)
 - Add constraints + indexes for fast graph queries
 - Prepare for semantic search (vector column later)
 - Set up CI/CD with GitHub Actions + Railway

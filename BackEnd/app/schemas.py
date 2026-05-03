@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -88,3 +88,20 @@ class LinkOut(BaseModel):
     note_id: UUID
     a: int
     b: int
+
+
+class AiAnalyzeRequest(NoteUpdate):
+    """Cornell note body for `/ai/analyze` (same JSON shape as a note export / PUT body)."""
+
+
+class SuggestedLinkPair(BaseModel):
+    a: int
+    b: int
+
+
+class AiAnalyzeOut(BaseModel):
+    status: Literal["ok", "placeholder", "error"] = "placeholder"
+    message: str = ""
+    analysis: str = ""
+    concepts: list[str] = Field(default_factory=list)
+    suggested_links: list[SuggestedLinkPair] = Field(default_factory=list)

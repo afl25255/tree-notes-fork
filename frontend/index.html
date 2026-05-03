@@ -18,8 +18,8 @@
             <button id="help">❓ Help</button>
             <button id="about">ℹ️ About</button>
             <div>
-                <label for="ollama-model">Ollama Model:</label>
-                <input type="text" id="ollama-model" value="llama3">
+                <label for="ollama-model">Ollama model (only if API uses <code>AI_PROVIDER=ollama</code>):</label>
+                <input type="text" id="ollama-model" value="llama3" title="Server reads OLLAMA_MODEL from env; this field is reserved for future UI wiring.">
             </div>
             <div>
                 <input type="checkbox" id="framework-of-trust">
@@ -63,7 +63,7 @@
                         <button class="button" onclick="zoom(0.9)" title="Zoom out">🔎</button>
                         <button class="button" id="gridToggle" aria-pressed="false" title="Toggle guide grid">#️⃣</button>
                         <button class="button" id="dictateToggle" aria-pressed="false" title="Toggle dictation">🎙️</button>
-                        <button class="button" id="analyzeNotesBtn" title="Analyze notes with local LLM">🤖</button>
+                        <button class="button" id="analyzeNotesBtn" title="Analyze notes via API (Gemini or Ollama on server)">🤖</button>
                         <button class="button" onclick="download()" title="Download notes">💾</button>
                         <button class="button" onclick="upload()" title="Upload notes">⬆️</button>
                         <button class="button" onclick="noteInfo()" title="Note info">📝</button>
