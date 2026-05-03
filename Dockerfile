@@ -13,5 +13,6 @@ COPY BackEnd/ .
 
 EXPOSE 8000
 
-# Railway sets PORT; default 8000 for local docker run.
-CMD ["sh", "-c", "python -m alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Migrations run in Railway preDeploy (see railway.toml) so the server can bind before healthchecks.
+# Railway sets PORT; default 8000 for local `docker run` (run alembic manually if you use this file locally).
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
