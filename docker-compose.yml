@@ -16,6 +16,11 @@ services:
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-8080}:80"
+    # Bind-mount the static UI for live editing — saving any file in
+    # frontend/ is picked up immediately, no `--build` needed (just Ctrl+F5
+    # in the browser). The image still bakes a copy in for prod / Railway.
+    volumes:
+      - ./frontend:/usr/share/nginx/html
     depends_on:
       - api
 

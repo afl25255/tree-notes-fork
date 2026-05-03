@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- script.js getApiBase() reads this; "/api" works for both the nginx proxy
+         (Docker Compose, Railway) and any reverse proxy that exposes /api/*. -->
+    <meta name="treenotes-api-base" content="/api">
     <link rel="stylesheet" href="style.css">
     <script src="script.js" defer></script>
     <title>Tree Notes</title>
