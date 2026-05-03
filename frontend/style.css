@@ -472,11 +472,13 @@ body {
 .analysis-panel {
     /* Float in the top-right of the notes column instead of stretching across,
        so the canvas stays mostly visible. Sticky keeps it pinned while the
-       user scrolls the notes area. */
+       user scrolls the notes area. The width adapts down on narrow columns
+       so the panel never spills out of the cornell--notes section.          */
     position: sticky;
     top: 116px;
     width: min(360px, calc(100% - 32px));
     margin-left: auto;
+    margin-right: 8px;
     margin-bottom: 16px;
     max-height: calc(100vh - 220px);
     border-radius: 14px;

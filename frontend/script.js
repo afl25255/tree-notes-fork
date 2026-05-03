@@ -523,7 +523,10 @@ document.addEventListener('click', function (event) {
         textToolbar.style.display = 'none';
     }
 
-    if (treeMenu && !event.target.closest('#treeQuickMenu') && !event.target.closest('#tree .container')) {
+    // Tree quick-menu only opens on right-click (see initTreeMenu); any
+    // left-click outside the menu itself should dismiss it, even if it
+    // happens inside the canvas (selecting a box, dragging, etc.).
+    if (treeMenu && !event.target.closest('#treeQuickMenu')) {
         treeMenu.classList.remove('visible');
         treeMenu.setAttribute('aria-hidden', 'true');
     }
@@ -1550,10 +1553,13 @@ function initTreeMenu() {
         treeMenu.setAttribute('aria-hidden', 'true');
     };
 
-    treeContainer.addEventListener('click', event => {
+    // Right-click anywhere on the empty canvas opens the quick menu — left
+    // clicks are reserved for selecting/dragging boxes and editing text.
+    treeContainer.addEventListener('contextmenu', event => {
         if (event.target.closest('.box') || event.target.closest('#toolbarBar') || event.target.closest('#treeQuickMenu')) {
             return;
         }
+        event.preventDefault();
 
         const rect = treeContainer.getBoundingClientRect();
         const x = event.clientX - rect.left + treeContainer.scrollLeft;
@@ -1574,6 +1580,13 @@ function initTreeMenu() {
             treeMenu.style.left = `${nextLeft}px`;
             treeMenu.style.top = `${nextTop}px`;
         });
+    });
+
+    // Dismiss the quick menu on Escape.
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && treeMenu.classList.contains('visible')) {
+            hideMenu();
+        }
     });
 
     treeMenu.addEventListener('click', event => {
