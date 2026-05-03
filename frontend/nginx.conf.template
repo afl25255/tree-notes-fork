@@ -1,6 +1,6 @@
 server {
-    listen 80;
-    server_name localhost;
+    listen ${PORT};
+    server_name _;
     root /usr/share/nginx/html;
     index index.html;
 
@@ -8,9 +8,9 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    # Browser calls same origin: /api/* → FastAPI on service "api"
+    # Browser calls same origin: /api/* → FastAPI (Compose: api:8000, Railway: <api>.railway.internal:<port>)
     location /api/ {
-        proxy_pass http://api:8000/;
+        proxy_pass ${API_UPSTREAM}/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
