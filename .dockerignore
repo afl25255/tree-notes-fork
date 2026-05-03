@@ -1,0 +1,13 @@
+.git
+.github
+frontend
+logo
+githooks
+**/.DS_Store
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.egg-info
+.env
+**/.env
