@@ -561,27 +561,37 @@ body {
 
 #tree .box {
     background-color: var(--surface-muted);
-    border-left: 1px dotted rgba(15, 23, 42, 0.18);
-    border-bottom: 1px dotted rgba(15, 23, 42, 0.18);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
     position: absolute;
     text-align: left;
-    padding: 12px 14px 18px;
-    border-radius: 16px;
+    padding: 10px 14px 14px;
+    border-radius: 10px;
     user-select: none;
     max-width: 240px;
-    min-width: 160px;
+    min-width: 140px;
     left: 120px;
     top: 120px;
     z-index: 2;
-    transition: box-shadow 0.25s ease, transform 0.25s ease;
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
     outline: none;
     overflow: hidden;
 }
 
+#tree .box:hover {
+    border-color: rgba(15, 23, 42, 0.22);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
 [data-theme="dark"] #tree .box {
     color: var(--text-primary);
-    border-left-color: rgba(226, 232, 240, 0.25);
-    border-bottom-color: rgba(226, 232, 240, 0.25);
+    border-color: rgba(148, 163, 184, 0.28);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] #tree .box:hover {
+    border-color: rgba(148, 163, 184, 0.5);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 .boxFooter {
@@ -598,11 +608,12 @@ body {
 }
 
 #tree svg {
+    /* `inset: 0` stretches the SVG to the actual rendered size of #zoom even
+       though #zoom only sets min-height (percentage heights from `height: 100%`
+       do not resolve in that case and would collapse the SVG to 0 px). */
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
+    display: block;
     z-index: 1;
     pointer-events: none;
     overflow: visible;
