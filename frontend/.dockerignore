@@ -2,4 +2,3 @@ Dockerfile
 .dockerignore
 README.md
 *.md
-railway.toml

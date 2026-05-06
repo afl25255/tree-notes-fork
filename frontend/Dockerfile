@@ -12,11 +12,10 @@ COPY . /usr/share/nginx/html
 RUN rm -f /usr/share/nginx/html/Dockerfile \
           /usr/share/nginx/html/.dockerignore \
           /usr/share/nginx/html/nginx.conf \
-          /usr/share/nginx/html/nginx.conf.template \
-          /usr/share/nginx/html/railway.toml
+          /usr/share/nginx/html/nginx.conf.template
 
-# Defaults match docker-compose. On Railway, PORT is injected by the platform
-# and API_UPSTREAM points at the API service via its private domain.
+# Defaults match docker-compose. Override PORT / API_UPSTREAM when the proxy
+# or upstream API runs on non-default ports or hostnames.
 ENV PORT=80 \
     API_UPSTREAM=http://api:8000 \
     NGINX_ENVSUBST_FILTER="^(PORT|API_UPSTREAM)$"

@@ -47,18 +47,17 @@
 - added Alembic
 - added Docker stack
 - configured nginx
-- Railway subscription for CI/CD
+- CI via GitHub Actions
 
 ### Database & DevOps next steps
 - Finalize DB schema for nodes & links
   - Ensure it matches frontend JSON exactly (re-verify after any frontend export changes)
 - Add constraints + indexes for fast graph queries
 - Prepare for semantic search (vector column later)
-- Set up CI/CD with GitHub Actions + Railway
+- Expand CI/CD (GitHub Actions)
   - Auto-build Docker images
   - Auto-run backend tests
-  - Auto-deploy API + DB migrations
-  - Auto-deploy frontend static files to Railway or a CDN
+  - Optionally auto-deploy API + migrations and frontend to your host or CDN
 - Add test Postgres in CI
   - Run backend tests against a real Postgres instance
   - Ensure migrations run cleanly

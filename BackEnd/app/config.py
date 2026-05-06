@@ -1,5 +1,4 @@
 from pathlib import Path
-from urllib.parse import urlparse
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,7 +8,7 @@ _REPO_ROOT = _BACKEND_ROOT.parent
 
 
 def _normalize_database_url(url: str) -> str:
-    """Railway/Postgres URLs: accept postgres://; add sslmode for public TCP proxy hosts."""
+    """Normalize Postgres URLs for SQLAlchemy: accept postgres://; leave sslmode to the caller or connection string."""
     u = (url or "").strip()
     if not u:
         return u
@@ -17,13 +16,6 @@ def _normalize_database_url(url: str) -> str:
         u = "postgresql://" + u[len("postgres://") :]
     if "sslmode=" in u.lower():
         return u
-    parsed = urlparse(u)
-    host = (parsed.hostname or "").lower()
-    if host.endswith(".railway.internal"):
-        return u
-    if host.endswith("rlwy.net"):
-        join = "&" if parsed.query else "?"
-        return u + join + "sslmode=require"
     return u
 
 
