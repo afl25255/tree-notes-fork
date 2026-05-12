@@ -15,6 +15,9 @@ let totalBoxes = 1;
 // Track auxiliary UI state such as the canvas grid visibility.
 let isGridActive = false;
 let isDictating = false;
+let dictationRecognition = null;
+let dictationTarget = null;
+const AI_PREFS_STORAGE_KEY = 'treenotes-ai-preferences';
 
 // Get the first DOM element with the class "box". This is likely the initial box.
 const seed = document.querySelectorAll(".box")[0];
@@ -310,32 +313,78 @@ function updateLinePosition(line, x1 = false, y1 = false, x2 = false, y2 = false
 
 
 // --------------------------------------------------------------------------
-// Image Pasting Functionality
+// Plain Text Pasting
 // --------------------------------------------------------------------------
 
-/**
- * Attaches an event listener to a given HTML element to handle image pasting.
- * When an image is pasted, it creates an <img> tag and appends it to the element.
- * @param {HTMLElement} box - The HTML element to which the paste listener will be attached.
- */
+function insertPlainTextAtSelection(text) {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return;
+    selection.deleteFromDocument();
+    const range = selection.getRangeAt(0);
+    const node = document.createTextNode(text);
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.setEndAfter(node);
+    selection.removeAllRanges();
+    selection.addRange(range);
+}
+
+function insertTextIntoEditable(editable, text) {
+    if (!editable || !text) return;
+    editable.focus();
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(editable);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const prefix = editable.textContent.trim() ? ' ' : '';
+    insertPlainTextAtSelection(prefix + text);
+    editable.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+    if (editable.classList?.contains('box')) updateLinesPosition(editable);
+}
+
+function rememberDictationTarget(event) {
+    const editable = event.target.closest?.('[contenteditable="true"]');
+    if (editable) dictationTarget = editable;
+}
+
+function getDictationTarget() {
+    const activeEditable = document.activeElement?.closest?.('[contenteditable="true"]');
+    if (activeEditable) {
+        dictationTarget = activeEditable;
+        return activeEditable;
+    }
+    if (dictationTarget?.isConnected) return dictationTarget;
+    const firstEmptyBox = document.querySelector('#boxes .box');
+    dictationTarget = firstEmptyBox || document.getElementById('notesText') || document.getElementById('cueText');
+    return dictationTarget;
+}
+
 function listenForImagePaste(box) {
     box.addEventListener('paste', function (event) {
-        let items = (event.clipboardData || event.originalEvent.clipboardData).items;
-        for (let item of items) {
-            if (item.type.indexOf("image") === 0) {
-                event.preventDefault();
-                let blob = item.getAsFile();
-                let reader = new FileReader();
-                reader.onload = function (event) {
-                    let img = document.createElement("img");
-                    img.src = event.target.result;
-                    img.style.maxWidth = "100%";
-                    box.appendChild(img);
-                };
-                reader.readAsDataURL(blob);
-            }
-        }
+        event.preventDefault();
+        event.stopPropagation();
+        const text = event.clipboardData?.getData('text/plain') || '';
+        insertPlainTextAtSelection(text);
+        box.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
     });
+}
+
+function setupPlainTextPaste() {
+    document.addEventListener('paste', event => {
+        const editable = event.target.closest?.('[contenteditable="true"]');
+        if (!editable) return;
+        event.preventDefault();
+        const text = event.clipboardData?.getData('text/plain') || '';
+        insertPlainTextAtSelection(text);
+        editable.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+    });
+}
+
+function setupDictationTargetTracking() {
+    document.addEventListener('focusin', rememberDictationTarget);
+    document.addEventListener('click', rememberDictationTarget);
 }
 
 // --------------------------------------------------------------------------
@@ -876,6 +925,86 @@ function setStatusMessage(message = '', variant = 'info') {
     }
 }
 
+function getSpeechRecognitionCtor() {
+    return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function setDictationActive(active, dictateButton = document.getElementById('dictateToggle')) {
+    isDictating = active;
+    if (dictateButton) {
+        dictateButton.classList.toggle('is-active', isDictating);
+        dictateButton.setAttribute('aria-pressed', String(isDictating));
+        dictateButton.title = isDictating ? 'Stop dictation' : 'Toggle dictation';
+    }
+}
+
+function stopDictation(message = 'Dictation stopped.') {
+    if (dictationRecognition && isDictating) {
+        dictationRecognition.stop();
+    }
+    setDictationActive(false);
+    if (message) setStatusMessage(message, 'info');
+}
+
+function startDictation(dictateButton) {
+    const Recognition = getSpeechRecognitionCtor();
+    if (!Recognition) {
+        setDictationActive(false, dictateButton);
+        setStatusMessage('Dictation is not supported in this browser. Try Chrome or Edge.', 'error');
+        return;
+    }
+
+    const target = getDictationTarget();
+    if (!target) {
+        setDictationActive(false, dictateButton);
+        setStatusMessage('Click a text field or note box before starting dictation.', 'error');
+        return;
+    }
+
+    dictationRecognition = new Recognition();
+    dictationRecognition.lang = navigator.language || 'en-US';
+    dictationRecognition.continuous = true;
+    dictationRecognition.interimResults = true;
+
+    dictationRecognition.onstart = () => {
+        setDictationActive(true, dictateButton);
+        setStatusMessage('Dictation active. Speak now; recognized text goes into the selected field.', 'info');
+    };
+
+    dictationRecognition.onresult = (event) => {
+        let finalText = '';
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            const result = event.results[index];
+            if (result.isFinal) finalText += result[0].transcript;
+        }
+        finalText = finalText.trim();
+        if (!finalText) return;
+        insertTextIntoEditable(getDictationTarget(), finalText);
+    };
+
+    dictationRecognition.onerror = (event) => {
+        const message = event.error === 'not-allowed'
+            ? 'Microphone permission denied. Enable microphone access to use dictation.'
+            : `Dictation error: ${event.error || 'unknown error'}.`;
+        setDictationActive(false, dictateButton);
+        setStatusMessage(message, 'error');
+    };
+
+    dictationRecognition.onend = () => {
+        if (isDictating) {
+            setDictationActive(false, dictateButton);
+            setStatusMessage('Dictation ended.', 'info');
+        }
+    };
+
+    try {
+        dictationRecognition.start();
+    } catch (error) {
+        setDictationActive(false, dictateButton);
+        setStatusMessage('Dictation could not start. Try clicking a text field first.', 'error');
+    }
+}
+
 function gatherCornellNotes() {
     const boxesWrapper = document.getElementById('boxes');
     let noteBody = '';
@@ -960,12 +1089,121 @@ function renderSimpleMarkdown(text) {
     return html.join('');
 }
 
+function renderBulletListHtml(items) {
+    const values = Array.isArray(items)
+        ? items.filter(s => typeof s === 'string' && s.trim())
+        : [];
+    if (!values.length) return '';
+    return '<ul>' + values.map(item => '<li>' + renderInlineMarkdown(escapeHtml(item.trim())) + '</li>').join('') + '</ul>';
+}
+
+function renderStructuredAnalysis(data, contentEl) {
+    const overviewSection = document.getElementById('analysisOverview');
+    const overviewList = document.getElementById('overviewList');
+    const swotSection = document.getElementById('analysisSwot');
+    const swotList = document.getElementById('swotList');
+
+    if (!overviewSection || !overviewList || !swotSection || !swotList) return false;
+
+    const overviewHtml = renderBulletListHtml(data.overview);
+    overviewList.innerHTML = overviewHtml;
+    overviewSection.hidden = !overviewHtml;
+
+    const studyAnalysis = data.study_analysis && typeof data.study_analysis === 'object'
+        ? data.study_analysis
+        : {};
+    const groups = [
+        ['Strengths', studyAnalysis.strengths],
+        ['Weaknesses', studyAnalysis.weaknesses],
+        ['Opportunities', studyAnalysis.opportunities],
+        ['Threats', studyAnalysis.threats],
+        ['Recommended improvements', studyAnalysis.recommended_improvements]
+    ];
+
+    swotList.innerHTML = '';
+    for (const [title, items] of groups) {
+        const html = renderBulletListHtml(items);
+        if (!html) continue;
+        const group = document.createElement('div');
+        group.className = 'swot-group';
+        const heading = document.createElement('h5');
+        heading.className = 'swot-group__title';
+        heading.textContent = title;
+        const body = document.createElement('div');
+        body.className = 'analysis-panel__content';
+        body.innerHTML = html;
+        group.append(heading, body);
+        swotList.appendChild(group);
+    }
+    swotSection.hidden = !swotList.children.length;
+
+    if (contentEl) contentEl.innerHTML = '';
+    return !!overviewHtml || !!swotList.children.length;
+}
+
+function structuredDataFromResponse(data) {
+    if (Array.isArray(data.overview) || (data.study_analysis && typeof data.study_analysis === 'object')) {
+        return data;
+    }
+    if (typeof data.analysis !== 'string') return data;
+    const raw = data.analysis.trim();
+    if (!raw.startsWith('{') && !raw.startsWith('```')) return data;
+    const cleaned = raw
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+    try {
+        const parsed = JSON.parse(cleaned);
+        if (parsed && typeof parsed === 'object') {
+            return { ...data, ...parsed, analysis: data.analysis };
+        }
+    } catch (_) {
+        const start = cleaned.indexOf('{');
+        const end = cleaned.lastIndexOf('}');
+        if (start !== -1 && end > start) {
+            try {
+                const parsed = JSON.parse(cleaned.slice(start, end + 1));
+                if (parsed && typeof parsed === 'object') {
+                    return { ...data, ...parsed, analysis: data.analysis };
+                }
+            } catch (__) {
+                return data;
+            }
+        }
+    }
+    return data;
+}
+
 function renderConceptsAndSuggestions(data) {
     const conceptsSection = document.getElementById('analysisConcepts');
     const conceptsList = document.getElementById('conceptsList');
     const suggestedSection = document.getElementById('analysisSuggested');
     const suggestedList = document.getElementById('suggestedLinksList');
+    let seeAlsoSection = document.getElementById('analysisSeeAlso');
+    let seeAlsoList = document.getElementById('seeAlsoList');
+    const videosSection = document.getElementById('analysisVideos');
+    const videosList = document.getElementById('videosList');
+
     if (!conceptsSection || !conceptsList || !suggestedSection || !suggestedList) return;
+
+    // Dynamically add the "Further Reading" section right below "Concepts" if missing
+    if (!seeAlsoSection) {
+        seeAlsoSection = document.createElement('div');
+        seeAlsoSection.id = 'analysisSeeAlso';
+        seeAlsoSection.hidden = true;
+        
+        const heading = document.createElement('h4');
+        heading.textContent = 'Further Reading';
+        seeAlsoSection.appendChild(heading);
+        
+        seeAlsoList = document.createElement('ul');
+        seeAlsoList.id = 'seeAlsoList';
+        seeAlsoList.style.paddingLeft = '20px';
+        seeAlsoSection.appendChild(seeAlsoList);
+        
+        conceptsSection.parentNode.insertBefore(seeAlsoSection, conceptsSection.nextSibling);
+    }
 
     const concepts = Array.isArray(data.concepts)
         ? data.concepts.filter(s => typeof s === 'string' && s.trim())
@@ -1008,7 +1246,15 @@ function renderConceptsAndSuggestions(data) {
 
             const label = document.createElement('span');
             label.className = 'suggested-link-item__label';
+            const aContent = typeof link.a_content === 'string' ? link.a_content.trim() : '';
+            const bContent = typeof link.b_content === 'string' ? link.b_content.trim() : '';
             label.textContent = `Box ${lo} ↔ Box ${hi}`;
+            if (aContent || bContent) {
+                const detail = document.createElement('span');
+                detail.className = 'suggested-link-item__boxes';
+                detail.textContent = `${aContent || 'Empty box'} ↔ ${bContent || 'Empty box'}`;
+                label.appendChild(detail);
+            }
 
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -1034,6 +1280,107 @@ function renderConceptsAndSuggestions(data) {
     } else {
         suggestedSection.hidden = true;
     }
+
+    const seeAlsoLinks = Array.isArray(data.see_also) ? data.see_also : [];
+    seeAlsoList.innerHTML = '';
+    if (seeAlsoLinks.length) {
+        for (const link of seeAlsoLinks) {
+            const item = document.createElement('li');
+            item.className = 'suggested-link-item';
+            item.style.marginBottom = '8px';
+
+            const a = document.createElement('a');
+            a.href = link.url || '#';
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = link.title || link.url || 'External Link';
+            a.style.textDecoration = 'underline';
+            a.style.wordBreak = 'break-word';
+
+            item.appendChild(a);
+            seeAlsoList.appendChild(item);
+        }
+        seeAlsoSection.hidden = false;
+    } else {
+        seeAlsoSection.hidden = true;
+    }
+
+    const videoLinks = Array.isArray(data.videos) ? data.videos : [];
+    if (videosList) videosList.innerHTML = '';
+    if (videosSection && videosList && videoLinks.length) {
+        for (const link of videoLinks) {
+            const item = document.createElement('li');
+            item.className = 'suggested-link-item';
+            item.style.marginBottom = '8px';
+
+            const a = document.createElement('a');
+            a.href = link.url || '#';
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = link.title || link.url || 'Video';
+            a.style.textDecoration = 'underline';
+            a.style.wordBreak = 'break-word';
+
+            item.appendChild(a);
+            videosList.appendChild(item);
+        }
+        videosSection.hidden = false;
+    } else if (videosSection) {
+        videosSection.hidden = true;
+    }
+}
+
+function getAiPreferences() {
+    const provider = document.getElementById('llm-provider')?.value || 'auto';
+    const model = document.getElementById('llm-model')?.value || '';
+    const proMode = !!document.getElementById('pro-mode')?.checked;
+    return { provider, model, proMode };
+}
+
+function saveAiPreferences() {
+    try {
+        localStorage.setItem(AI_PREFS_STORAGE_KEY, JSON.stringify(getAiPreferences()));
+    } catch (_) {
+        // localStorage can fail in private browsing; defaults still work.
+    }
+}
+
+function updateAiModelOptions() {
+    const providerSelect = document.getElementById('llm-provider');
+    const modelSelect = document.getElementById('llm-model');
+    if (!providerSelect || !modelSelect) return;
+
+    const provider = providerSelect.value;
+    for (const option of modelSelect.options) {
+        const optionProvider = option.dataset.provider || '';
+        option.hidden = !!optionProvider && provider !== 'auto' && optionProvider !== provider;
+    }
+    const selected = modelSelect.selectedOptions[0];
+    if (selected?.hidden) modelSelect.value = '';
+}
+
+function initAiPreferences() {
+    const providerSelect = document.getElementById('llm-provider');
+    const modelSelect = document.getElementById('llm-model');
+    const proToggle = document.getElementById('pro-mode');
+    if (!providerSelect || !modelSelect || !proToggle) return;
+
+    try {
+        const saved = JSON.parse(localStorage.getItem(AI_PREFS_STORAGE_KEY) || '{}');
+        if (typeof saved.provider === 'string') providerSelect.value = saved.provider;
+        if (typeof saved.model === 'string') modelSelect.value = saved.model;
+        proToggle.checked = !!saved.proMode;
+    } catch (_) {
+        // Ignore malformed saved state and keep defaults.
+    }
+
+    updateAiModelOptions();
+    providerSelect.addEventListener('change', () => {
+        updateAiModelOptions();
+        saveAiPreferences();
+    });
+    modelSelect.addEventListener('change', saveAiPreferences);
+    proToggle.addEventListener('change', saveAiPreferences);
 }
 
 function openInsightsPanel(panel) {
@@ -1050,10 +1397,18 @@ function closeInsightsPanel(panel) {
 
 function resetAnalysisContent(contentEl) {
     if (contentEl) contentEl.innerHTML = '';
+    const overviewSection = document.getElementById('analysisOverview');
+    const swotSection = document.getElementById('analysisSwot');
     const conceptsSection = document.getElementById('analysisConcepts');
     const suggestedSection = document.getElementById('analysisSuggested');
+    const seeAlsoSection = document.getElementById('analysisSeeAlso');
+    const videosSection = document.getElementById('analysisVideos');
+    if (overviewSection) overviewSection.hidden = true;
+    if (swotSection) swotSection.hidden = true;
     if (conceptsSection) conceptsSection.hidden = true;
     if (suggestedSection) suggestedSection.hidden = true;
+    if (seeAlsoSection) seeAlsoSection.hidden = true;
+    if (videosSection) videosSection.hidden = true;
 }
 
 function clearAnalysisPanel(panel, contentEl) {
@@ -1092,15 +1447,18 @@ async function analyzeNotesWithLLM() {
             throw new Error(errText || `HTTP ${response.status}`);
         }
 
-        const data = await response.json();
+        const data = structuredDataFromResponse(await response.json());
         const status = data.status;
         const analysis = (data.analysis || '').trim();
         const message = (data.message || '').trim();
 
         if (status === 'ok') {
-            contentEl.innerHTML = analysis
-                ? renderSimpleMarkdown(analysis)
-                : '<p><em>The model returned no narrative summary, but you can still review the concepts and suggested links below.</em></p>';
+            const renderedStructured = renderStructuredAnalysis(data, contentEl);
+            if (!renderedStructured) {
+                contentEl.innerHTML = analysis
+                    ? renderSimpleMarkdown(analysis)
+                    : '<p><em>The model returned no narrative summary, but you can still review the concepts and suggested links below.</em></p>';
+            }
             renderConceptsAndSuggestions(data);
             openInsightsPanel(panel);
             setStatusMessage('Analysis complete.', 'info');
@@ -1136,20 +1494,13 @@ function initToolbarAssistControls() {
     const contentEl = document.getElementById('analysisContent');
 
     if (dictateButton) {
-        const updateButton = () => {
-            dictateButton.classList.toggle('is-active', isDictating);
-            dictateButton.setAttribute('aria-pressed', String(isDictating));
-        };
-
-        updateButton();
+        setDictationActive(false, dictateButton);
 
         dictateButton.addEventListener('click', () => {
-            isDictating = !isDictating;
-            updateButton();
             if (isDictating) {
-                setStatusMessage('Dictation placeholder active (integration pending).', 'info');
+                stopDictation('Dictation stopped.');
             } else {
-                setStatusMessage('', 'info');
+                startDictation(dictateButton);
             }
         });
     }
@@ -1283,10 +1634,14 @@ function collectNotebookPayload() {
 
 function apiBodyFromCanvas() {
     const raw = collectNotebookPayload();
+    const aiPrefs = getAiPreferences();
     return {
         heading: raw.heading,
         cueText: raw.cueText,
         summary: raw.summary,
+        llm_provider: aiPrefs.provider,
+        llm_model: aiPrefs.model,
+        pro_mode: aiPrefs.proMode,
         boxes: raw.boxes.map(b => ({
             id: Number(b.id),
             content: b.content,
@@ -1638,7 +1993,7 @@ function initTreeMenu() {
                 }
                 break;
             case 'help':
-                alert('Coming soon!');
+                document.getElementById('helpDialog').showModal();
                 break;
             case 'dark':
                 toggleDarkMode();
@@ -1710,12 +2065,57 @@ function initResizer() {
 
 document.addEventListener('DOMContentLoaded', () => {
     setupEditablePlaceholders();
+    setupPlainTextPaste();
+    setupDictationTargetTracking();
     initGridToggle();
     initTreePanning();
     initTreeMenu();
     initToolbarAssistControls();
+    initAiPreferences();
     initResizer();
     initApiIntegration();
+
+    // --- GUI Enhancements ---
+    // Enforce visibility of status messages and styling of the Cornell canvas
+    const guiStyle = document.createElement('style');
+    guiStyle.textContent = `
+        /* Position status messages prominently just below the top toolbar */
+        #statusMessage {
+            display: none;
+        }
+        #statusMessage.is-active {
+            display: block !important;
+            position: fixed !important;
+            top: 70px !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            z-index: 10000 !important;
+            padding: 12px 24px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+            font-weight: 500 !important;
+            background-color: #e6f7ff !important;
+            color: #0056b3 !important;
+            border: 1px solid #bae1ff !important;
+        }
+        #statusMessage.is-alert {
+            background-color: #fff1f0 !important;
+            color: #cf1322 !important;
+            border: 1px solid #ffa39e !important;
+        }
+        
+        /* Make main Cornell canvas area all white (in light mode) and large enough for many boxes/seeds */
+        html:not([data-theme="dark"]) #tree,
+        html:not([data-theme="dark"]) #tree .container,
+        html:not([data-theme="dark"]) #zoom {
+            background-color: #ffffff !important;
+        }
+        #zoom {
+            min-width: 4000px !important;
+            min-height: 4000px !important;
+        }
+    `;
+    document.head.appendChild(guiStyle);
 
     const fullscreenBtn = document.getElementById('fullscreen-btn');
     if(fullscreenBtn) {
@@ -1755,7 +2155,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         document.getElementById('toggleDarkMode').addEventListener('click', toggleDarkMode);
-        document.getElementById('help').addEventListener('click', () => alert('Coming soon!'));
-        document.getElementById('about').addEventListener('click', () => alert('Coming soon!'));
+        document.getElementById('help').addEventListener('click', () => document.getElementById('helpDialog').showModal());
+        document.getElementById('about').addEventListener('click', () => document.getElementById('aboutDialog').showModal());
     }
 });

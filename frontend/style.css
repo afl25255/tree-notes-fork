@@ -263,6 +263,7 @@ body {
     min-height: 0;
     height: calc(100vh - 120px);
     max-height: calc(100svh - 120px);
+    position: relative;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) minmax(0, 0.32fr);
     gap: 18px;
@@ -408,13 +409,13 @@ body {
 
 .notes-toolbar {
     position: sticky;
-    top: 16px;
+    top: 0;
     display: flex;
     flex-wrap: nowrap;
     flex-shrink: 0;
     gap: 8px;
     align-items: center;
-    margin: -56px 0 16px;
+    margin: 0 0 16px;
     padding: 8px 10px;
     max-width: 100%;
     box-sizing: border-box;
@@ -654,6 +655,34 @@ body.has-insights {
     line-height: 1.4;
 }
 
+.swot-list {
+    display: grid;
+    gap: 8px;
+}
+
+.swot-group {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--surface-muted);
+    border: 1px solid var(--surface-strong);
+}
+
+.swot-group__title {
+    margin: 0 0 5px;
+    color: var(--text-primary);
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.swot-group ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.swot-group li {
+    margin: 3px 0;
+}
+
 [data-theme="dark"] .concept-chip {
     background: rgba(148, 163, 184, 0.12);
     border-color: rgba(148, 163, 184, 0.28);
@@ -682,6 +711,15 @@ body.has-insights {
 
 .suggested-link-item__label {
     color: var(--text-primary);
+    min-width: 0;
+}
+
+.suggested-link-item__boxes {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    line-height: 1.3;
 }
 
 .suggested-link-item__btn {
@@ -780,7 +818,8 @@ body.has-insights {
     z-index: 2;
     transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
     outline: none;
-    overflow: hidden;
+    overflow: auto;
+    resize: both;
 }
 
 #tree .box:hover {
@@ -789,7 +828,8 @@ body.has-insights {
 }
 
 [data-theme="dark"] #tree .box {
-    color: var(--text-primary);
+    color: #f8fafc !important;
+    background-color: #020617 !important;
     border-color: rgba(148, 163, 184, 0.28);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
@@ -797,6 +837,10 @@ body.has-insights {
 [data-theme="dark"] #tree .box:hover {
     border-color: rgba(148, 163, 184, 0.5);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] #tree .box .boxFooter {
+    color: #cbd5e1;
 }
 
 .boxFooter {
@@ -932,7 +976,10 @@ body.has-insights {
 
 .toolbar {
     display: none;
-    position: absolute;
+    position: absolute !important;
+    top: 16px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
     background: rgba(255, 255, 255, 0.95);
     border: 1px solid rgba(148, 163, 184, 0.35);
     padding: 12px;

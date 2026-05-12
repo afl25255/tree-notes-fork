@@ -11,6 +11,7 @@ def _isolate_ai_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.config import settings
 
     monkeypatch.setattr(settings, "gemini_api_key", "")
+    monkeypatch.setattr(settings, "openai_api_key", "")
     monkeypatch.setattr(settings, "ai_provider", "auto")
 
 
@@ -34,6 +35,28 @@ def _patch_gemini_response(monkeypatch: pytest.MonkeyPatch, payload_text: str) -
         def post(self, *args, **kwargs):
             captured["json"] = kwargs.get("json")
             captured["params"] = kwargs.get("params")
+            return FakeResp()
+
+    monkeypatch.setattr("app.ai_analyze.httpx.Client", PatchedClient)
+    return captured
+
+
+def _patch_openai_response(monkeypatch: pytest.MonkeyPatch, payload_text: str) -> dict:
+    captured: dict = {}
+
+    class FakeResp:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"output_text": payload_text}
+
+    class PatchedClient(httpx.Client):
+        def post(self, *args, **kwargs):
+            captured["json"] = kwargs.get("json")
+            captured["headers"] = kwargs.get("headers")
             return FakeResp()
 
     monkeypatch.setattr("app.ai_analyze.httpx.Client", PatchedClient)
@@ -98,7 +121,14 @@ def test_ai_analyze_gemini_returns_structured_payload(
 
     model_json = json.dumps(
         {
-            "analysis": "- **One** insight\n- Another insight",
+            "overview": ["**One** insight", "Another insight"],
+            "study_analysis": {
+                "strengths": ["Clear phase sequence"],
+                "weaknesses": ["Missing cytokinesis detail"],
+                "opportunities": ["Connect phases to exam diagrams"],
+                "threats": ["Confusing prophase with metaphase"],
+                "recommended_improvements": ["Add a comparison table"],
+            },
             "concepts": ["mitosis", "Mitosis", "  cell cycle  ", "", 42],
             "suggested_links": [
                 {"a": 1, "b": 2},
@@ -106,6 +136,15 @@ def test_ai_analyze_gemini_returns_structured_payload(
                 {"a": 1, "b": 1},  # self-link, drop
                 {"a": 1, "b": 99},  # unknown id, drop
                 {"a": "x", "b": "y"},  # not ints, drop
+            ],
+            "see_also": [
+                {"title": "Khan Academy: Mitosis", "url": "https://www.khanacademy.org/science/biology/cellular-molecular-biology/mitosis/a/phases-of-mitosis"},
+                {"title": "", "url": "https://example.com/empty-title"},
+                {"title": "Bad URL", "url": "notaurl"},
+            ],
+            "videos": [
+                {"title": "Mitosis video", "url": "https://www.youtube.com/watch?v=f-ldPgEfAHI"},
+                {"title": "Non-video", "url": "https://example.com/video"},
             ],
         }
     )
@@ -125,13 +164,33 @@ def test_ai_analyze_gemini_returns_structured_payload(
     data = r.json()
 
     assert data["status"] == "ok"
+    assert data["overview"] == ["**One** insight", "Another insight"]
+    assert data["study_analysis"] == {
+        "strengths": ["Clear phase sequence"],
+        "weaknesses": ["Missing cytokinesis detail"],
+        "opportunities": ["Connect phases to exam diagrams"],
+        "threats": ["Confusing prophase with metaphase"],
+        "recommended_improvements": ["Add a comparison table"],
+    }
     assert "insight" in data["analysis"]
     assert data["concepts"] == ["mitosis", "cell cycle"]
-    assert data["suggested_links"] == [{"a": 1, "b": 2}]
+    assert data["suggested_links"] == [
+        {"a": 1, "a_content": "Prophase", "b": 2, "b_content": "Metaphase"}
+    ]
+    assert data["see_also"] == [
+        {
+            "title": "Khan Academy: Mitosis",
+            "url": "https://www.khanacademy.org/science/biology/cellular-molecular-biology/mitosis/a/phases-of-mitosis",
+        }
+    ]
+    assert data["videos"] == [
+        {"title": "Mitosis video", "url": "https://www.youtube.com/watch?v=f-ldPgEfAHI"}
+    ]
 
     gen = (captured["json"] or {}).get("generationConfig", {})
     assert gen.get("responseMimeType") == "application/json"
     assert "responseSchema" in gen
+    assert "tools" not in (captured["json"] or {})
 
 
 def test_ai_analyze_gemini_malformed_json_falls_back_to_text(
@@ -156,6 +215,46 @@ def test_ai_analyze_gemini_malformed_json_falls_back_to_text(
     assert data["suggested_links"] == []
 
 
+def test_ai_analyze_extracts_json_from_fenced_model_text(
+    client: TestClient, monkeypatch
+) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "gemini")
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+
+    model_json = json.dumps(
+        {
+            "overview": ["Chess openings are grouped by first move."],
+            "study_analysis": {
+                "strengths": ["Clear opening examples"],
+                "weaknesses": [],
+                "opportunities": [],
+                "threats": [],
+                "recommended_improvements": ["Add common continuations"],
+            },
+            "concepts": ["e4", "Queen's Gambit"],
+            "suggested_links": [],
+            "see_also": [],
+            "videos": [],
+        }
+    )
+    _patch_gemini_response(monkeypatch, f"```json\n{model_json}\n```")
+
+    r = client.post(
+        "/ai/analyze",
+        json={"heading": "Chess", "cueText": "", "summary": "", "boxes": []},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["overview"] == ["Chess openings are grouped by first move."]
+    assert data["study_analysis"]["recommended_improvements"] == [
+        "Add common continuations"
+    ]
+    assert data["concepts"] == ["e4", "Queen's Gambit"]
+    assert not data["analysis"].lstrip().startswith("{")
+
+
 def test_ai_analyze_gemini_drops_links_when_no_boxes(client: TestClient, monkeypatch) -> None:
     from app.config import settings
 
@@ -166,9 +265,18 @@ def test_ai_analyze_gemini_drops_links_when_no_boxes(client: TestClient, monkeyp
         monkeypatch,
         json.dumps(
             {
-                "analysis": "ok",
+                "overview": ["ok"],
+                "study_analysis": {
+                    "strengths": ["useful"],
+                    "weaknesses": [],
+                    "opportunities": [],
+                    "threats": [],
+                    "recommended_improvements": ["next"],
+                },
                 "concepts": ["alpha"],
                 "suggested_links": [{"a": 1, "b": 2}],
+                "see_also": [],
+                "videos": [],
             }
         ),
     )
@@ -180,7 +288,63 @@ def test_ai_analyze_gemini_drops_links_when_no_boxes(client: TestClient, monkeyp
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == "ok"
-    assert data["analysis"] == "ok"
+    assert data["overview"] == ["ok"]
+    assert data["analysis"] == (
+        "Overview:\n- ok\n\nAnalysis:\nStrengths:\n- useful"
+        "\n\nRecommended improvements:\n- next"
+    )
     assert data["concepts"] == ["alpha"]
     # No box ids in the request → suggested_links must be dropped server-side.
     assert data["suggested_links"] == []
+
+
+def test_ai_analyze_openai_uses_structured_outputs_and_request_model(
+    client: TestClient, monkeypatch
+) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "placeholder")
+    monkeypatch.setattr(settings, "openai_api_key", "test-openai-key")
+
+    captured = _patch_openai_response(
+        monkeypatch,
+        json.dumps(
+            {
+                "overview": ["OpenAI works"],
+                "study_analysis": {
+                    "strengths": [],
+                    "weaknesses": [],
+                    "opportunities": [],
+                    "threats": [],
+                    "recommended_improvements": [],
+                },
+                "concepts": [],
+                "suggested_links": [],
+                "see_also": [],
+                "videos": [],
+            }
+        ),
+    )
+
+    r = client.post(
+        "/ai/analyze",
+        json={
+            "heading": "X",
+            "cueText": "",
+            "summary": "",
+            "llm_provider": "openai",
+            "llm_model": "gpt-5-mini",
+            "pro_mode": True,
+            "boxes": [],
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "ok"
+    assert data["overview"] == ["OpenAI works"]
+
+    payload = captured["json"]
+    assert payload["model"] == "gpt-5-mini"
+    assert payload["text"]["format"]["type"] == "json_schema"
+    assert payload["text"]["format"]["strict"] is True
+    assert "OPENAI_API_KEY" not in json.dumps(payload)

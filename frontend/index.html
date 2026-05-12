@@ -35,17 +35,30 @@
             <hr class="menu-divider" />
 
             <section class="menu-section menu-section--field">
-                <label class="menu-label" for="ollama-model">Ollama model</label>
-                <input type="text" class="menu-input" id="ollama-model" value="llama3"
-                       title="Server reads OLLAMA_MODEL from env; this field is reserved for future UI wiring.">
-                <p class="menu-hint">Used only when the server runs with <code>AI_PROVIDER=ollama</code>.</p>
+                <label class="menu-label" for="llm-provider">AI provider</label>
+                <select class="menu-input" id="llm-provider" title="Backend API keys stay on the server.">
+                    <option value="auto">Server default</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="ollama">Ollama</option>
+                </select>
+                <label class="menu-label" for="llm-model">AI model</label>
+                <select class="menu-input" id="llm-model">
+                    <option value="">Provider default</option>
+                    <option value="gemini-2.5-flash" data-provider="gemini">Gemini 2.5 Flash</option>
+                    <option value="gpt-5-mini" data-provider="openai">OpenAI GPT-5 mini</option>
+                    <option value="gpt-5.2" data-provider="openai">OpenAI GPT-5.2</option>
+                    <option value="llama3" data-provider="ollama">Ollama llama3</option>
+                </select>
+                <p class="menu-hint">Choose a server-enabled provider. OpenAI uses <code>OPENAI_API_KEY</code> on the backend.</p>
             </section>
 
             <section class="menu-section menu-section--toggle">
                 <label class="menu-toggle">
-                    <input type="checkbox" id="framework-of-trust">
-                    <span>Framework of Trust</span>
+                    <input type="checkbox" id="pro-mode">
+                    <span>Pro Mode</span>
                 </label>
+                <p class="menu-hint">Prioritizes highly reputable academic and scientific sources.</p>
             </section>
 
             <hr class="menu-divider" />
@@ -88,19 +101,19 @@
             <div id="cornell-resizer"></div>
 
             <section id="tree" class="cornell-column cornell-column--notes">
-                <div class="container">
-                    <div id="toolbarBar" class="notes-toolbar">
-                        <button class="button" onclick="createNewBlock()" title="Add box">➕</button>
-                        <button class="button" onclick="zoom(1.1)" title="Zoom in">🔍</button>
-                        <button class="button" onclick="zoom(0.9)" title="Zoom out">🔎</button>
-                        <button class="button" id="gridToggle" aria-pressed="false" title="Toggle guide grid">#️⃣</button>
-                        <button class="button" id="dictateToggle" aria-pressed="false" title="Toggle dictation">🎙️</button>
-                        <button class="button" id="analyzeNotesBtn" title="Analyze notes via API (Gemini or Ollama on server)">🤖</button>
-                        <button class="button" onclick="download()" title="Download notes">💾</button>
-                        <button class="button" onclick="upload()" title="Upload notes">⬆️</button>
-                        <button class="button" onclick="noteInfo()" title="Note info">📝</button>
-                    </div>
-
+            <div id="toolbarBar" class="notes-toolbar">
+                <button class="button" onclick="createNewBlock()" title="Add box">➕</button>
+                <button class="button" onclick="zoom(1.1)" title="Zoom in">🔍</button>
+                <button class="button" onclick="zoom(0.9)" title="Zoom out">🔎</button>
+                <button class="button" id="gridToggle" aria-pressed="false" title="Toggle guide grid">#️⃣</button>
+                <button class="button" id="dictateToggle" aria-pressed="false" title="Toggle dictation">🎙️</button>
+                <button class="button" id="analyzeNotesBtn" title="Analyze notes via API">🤖</button>
+                <button class="button" onclick="download()" title="Download notes">💾</button>
+                <button class="button" onclick="upload()" title="Upload notes">⬆️</button>
+                <button class="button" onclick="noteInfo()" title="Note info">📝</button>
+            </div>
+            
+            <div class="container">
                     <div id="statusMessage" class="status-message" aria-live="polite"></div>
 
                     <div id="treeQuickMenu" class="tree-menu" role="menu" aria-hidden="true">
@@ -133,6 +146,14 @@
             <span class="analysis-panel__close" id="closeAnalysis" role="button" tabindex="0" aria-label="Hide AI insights">✕</span>
         </button>
         <div class="analysis-panel__body" id="analysisBody">
+            <div id="analysisOverview" class="analysis-panel__section" hidden>
+                <h4 class="analysis-panel__section-title">Overview</h4>
+                <div id="overviewList" class="analysis-panel__content"></div>
+            </div>
+            <div id="analysisSwot" class="analysis-panel__section" hidden>
+                <h4 class="analysis-panel__section-title">Analysis</h4>
+                <div id="swotList" class="swot-list"></div>
+            </div>
             <div id="analysisContent" class="analysis-panel__content"></div>
             <div id="analysisConcepts" class="analysis-panel__section" hidden>
                 <h4 class="analysis-panel__section-title">Concepts</h4>
@@ -141,6 +162,14 @@
             <div id="analysisSuggested" class="analysis-panel__section" hidden>
                 <h4 class="analysis-panel__section-title">Suggested links</h4>
                 <ul id="suggestedLinksList" class="suggested-links"></ul>
+            </div>
+            <div id="analysisSeeAlso" class="analysis-panel__section" hidden>
+                <h4 class="analysis-panel__section-title">See Also</h4>
+                <ul id="seeAlsoList" class="suggested-links"></ul>
+            </div>
+            <div id="analysisVideos" class="analysis-panel__section" hidden>
+                <h4 class="analysis-panel__section-title">Videos</h4>
+                <ul id="videosList" class="suggested-links"></ul>
             </div>
         </div>
     </aside>
@@ -164,6 +193,37 @@
             <div class="api-open-dialog__actions">
                 <button type="button" id="apiOpenRefresh">Refresh</button>
                 <button type="button" id="apiOpenCancel">Close</button>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="helpDialog" class="api-open-dialog">
+        <div class="api-open-dialog__inner">
+            <header class="api-open-dialog__header">Help &amp; Instructions</header>
+            <div style="padding: 1rem 0; line-height: 1.5;">
+                <h3>How to use TreeNotes:</h3>
+                <ul style="margin-top: 0.5rem; margin-left: 1.5rem;">
+                    <li><strong>Add Boxes:</strong> Click the ➕ button in the toolbar to add a new note.</li>
+                    <li><strong>Link Boxes:</strong> Select a box, hover over "Link 🖇️" in the popup menu, and pick another box.</li>
+                    <li><strong>Analyze AI:</strong> Click the 🤖 button to get AI insights about your notes.</li>
+                </ul>
+                <p style="margin-top: 1rem;"><em>(Future editing placeholder: Add more instructions here)</em></p>
+            </div>
+            <div class="api-open-dialog__actions">
+                <button type="button" onclick="document.getElementById('helpDialog').close()">Close</button>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="aboutDialog" class="api-open-dialog">
+        <div class="api-open-dialog__inner">
+            <header class="api-open-dialog__header">About TreeNotes</header>
+            <div style="padding: 1rem 0; line-height: 1.5; text-align: center;">
+                <p style="font-size: 1.1em; font-weight: bold; margin-bottom: 0.5rem;">Treenotes Beta v.0.5.26</p>
+                <p>&copy; 2025-2026 Ali and Group W13<br>(Odd Future Wolf Gang Code Them All)</p>
+            </div>
+            <div class="api-open-dialog__actions">
+                <button type="button" onclick="document.getElementById('aboutDialog').close()">Close</button>
             </div>
         </div>
     </dialog>

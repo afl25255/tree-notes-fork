@@ -93,15 +93,35 @@ class LinkOut(BaseModel):
 class AiAnalyzeRequest(NoteUpdate):
     """Cornell note body for `/ai/analyze` (same JSON shape as a note export / PUT body)."""
 
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    pro_mode: bool = False
+
 
 class SuggestedLinkPair(BaseModel):
     a: int
+    a_content: str = ""
     b: int
+    b_content: str = ""
 
+class ExternalLink(BaseModel):
+    title: str
+    url: str
+
+class StudyAnalysis(BaseModel):
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    opportunities: list[str] = Field(default_factory=list)
+    threats: list[str] = Field(default_factory=list)
+    recommended_improvements: list[str] = Field(default_factory=list)
 
 class AiAnalyzeOut(BaseModel):
     status: Literal["ok", "placeholder", "error"] = "placeholder"
     message: str = ""
+    overview: list[str] = Field(default_factory=list)
+    study_analysis: StudyAnalysis = Field(default_factory=StudyAnalysis)
     analysis: str = ""
     concepts: list[str] = Field(default_factory=list)
     suggested_links: list[SuggestedLinkPair] = Field(default_factory=list)
+    see_also: list[ExternalLink] = Field(default_factory=list)
+    videos: list[ExternalLink] = Field(default_factory=list)

@@ -8,5 +8,5 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 @router.post("/analyze", response_model=AiAnalyzeOut)
 def analyze_note(body: AiAnalyzeRequest) -> AiAnalyzeOut:
-    """Analyze Cornell note via Gemini, server-side Ollama, or placeholder (see `AI_PROVIDER`)."""
+    """Analyze Cornell note via Gemini, OpenAI, server-side Ollama, or placeholder."""
     return run_ai_analyze(body)
