@@ -15,6 +15,8 @@ class Note(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     heading: str = Field(default="")
+    heading_background_color: Optional[str] = None
+    heading_text_color: Optional[str] = None
     cue_text: str = Field(default="")
     summary_text: str = Field(default="")
     created_at: datetime = Field(default_factory=utcnow)
@@ -35,6 +37,7 @@ class NoteBox(SQLModel, table=True):
     left: str = Field(default="0px")
     top: str = Field(default="20px")
     background_color: Optional[str] = None
+    text_color: Optional[str] = None
 
     note: Optional[Note] = Relationship(back_populates="boxes")
 

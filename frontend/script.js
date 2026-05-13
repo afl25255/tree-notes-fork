@@ -18,9 +18,12 @@ let isDictating = false;
 let dictationRecognition = null;
 let dictationTarget = null;
 const AI_PREFS_STORAGE_KEY = 'treenotes-ai-preferences';
+const DICTATION_PREFS_STORAGE_KEY = 'treenotes-dictation-preferences';
+const UI_LANGUAGE_STORAGE_KEY = 'treenotes-ui-language';
 
 // Get the first DOM element with the class "box". This is likely the initial box.
 const seed = document.querySelectorAll(".box")[0];
+ensureBoxFooter(seed);
 
 // --------------------------------------------------------------------------
 // Event Listeners Attached on Initialization
@@ -46,6 +49,7 @@ boxes.set(seed.id, {
     box: seed,
     lines: []
 });
+setupBoxPlaceholder(seed);
 
 // --------------------------------------------------------------------------
 // Zoom Functionality
@@ -95,14 +99,23 @@ function makeDraggable(box) {
         toolbar.style.left = rect.right + 'px';
         toolbar.style.top = rect.top + 'px';
         const colorPicker = document.getElementById("boxColor");
-        colorPicker.value = colorToHex(box.style.backgroundColor);
-        toolbar.style.display = 'block';
+        const textColorPicker = document.getElementById("boxTextColor");
+        const computedStyle = getComputedStyle(box);
+        colorPicker.value = colorToHex(box.style.backgroundColor || computedStyle.backgroundColor);
+        textColorPicker.value = colorToHex(box.style.color || computedStyle.color);
+        toolbar.style.display = 'flex';
         document.getElementById("toolbar").dataset.boxId = box.id;
+    });
+
+    box.addEventListener("input", () => {
+        syncBoxPlaceholderState(box);
+        updateLinesPosition(box);
     });
 
     // Event listener for when the mouse button is pressed down on the box.
     // Initiates the dragging process.
     box.addEventListener("mousedown", (e) => {
+        if (e.target.closest('#toolbar')) return;
         isDragging = true;
         offsetX = e.clientX - box.offsetLeft;
         offsetY = e.clientY - box.offsetTop;
@@ -142,12 +155,12 @@ function addBlock(box) {
  * Creates a new draggable block (div element) and appends it to the "boxes" container.
  * @param {number} [x=0] - The initial x-coordinate (left position) of the new box.
  * @param {number} [y=20] - The initial y-coordinate (top position) of the new box.
- * @param {string} [content="New Box"] - The initial text content of the new box.
- * @param {{id?: string|number}} [options={}] - Optional metadata (currently only supports an explicit id).
+ * @param {string} [content="New Box"] - The placeholder or initial text content of the new box.
+ * @param {{id?: string|number, contentIsPlaceholder?: boolean, placeholder?: string}} [options={}] - Optional metadata.
  * @returns {HTMLElement} The newly created box element.
  */
 function createNewBlock(x = 0, y = 20, content = "New Box", options = {}) {
-    const { id: requestedId = null } = options;
+    const { id: requestedId = null, contentIsPlaceholder = true, placeholder = "Seed" } = options;
     const newBox = document.createElement('div');
     const resolvedId = requestedId !== null ? String(requestedId) : String(++totalBoxes);
 
@@ -158,18 +171,17 @@ function createNewBlock(x = 0, y = 20, content = "New Box", options = {}) {
     newBox.style.position = "absolute";
     newBox.style.left = `${x}px`;
     newBox.style.top = `${y}px`;
-    newBox.style.backgroundColor = "#f1f1f1";
     newBox.contentEditable = true;
-    newBox.textContent = content;
+    newBox.dataset.placeholder = contentIsPlaceholder ? (content || placeholder) : placeholder;
+    newBox.textContent = contentIsPlaceholder ? "" : (content || "");
+    syncBoxPlaceholderState(newBox);
 
-    const footer = document.createElement("h6");
-    footer.innerHTML = `#${resolvedId}`;
-    footer.className = "boxFooter";
-    newBox.appendChild(footer);
+    ensureBoxFooter(newBox);
 
     document.getElementById("boxes").appendChild(newBox);
     makeDraggable(newBox);
     listenForImagePaste(newBox);
+    setupBoxPlaceholder(newBox);
 
     boxes.set(newBox.id, {
         box: newBox,
@@ -177,6 +189,105 @@ function createNewBlock(x = 0, y = 20, content = "New Box", options = {}) {
     });
 
     return newBox;
+}
+
+function getBoxText(box) {
+    if (!box) return "";
+    const clone = box.cloneNode(true);
+    clone.querySelector('.boxFooter')?.remove();
+    return clone.textContent.trim();
+}
+
+function syncBoxPlaceholderState(box) {
+    if (!box) return;
+    box.classList.toggle('is-empty', getBoxText(box).length === 0);
+}
+
+function setupBoxPlaceholder(box) {
+    if (!box) return;
+    syncBoxPlaceholderState(box);
+    box.addEventListener('focus', () => syncBoxPlaceholderState(box));
+    box.addEventListener('blur', () => syncBoxPlaceholderState(box));
+}
+
+function ensureBoxFooter(box) {
+    if (!box) return;
+    box.dataset.label = `#${box.id}`;
+    box.querySelector('.boxFooter')?.remove();
+}
+
+function applyBoxCustomColor(box, color) {
+    if (!box) return;
+    const hex = colorToHex(color);
+    box.style.backgroundColor = hex;
+    if (!box.classList.contains('has-custom-text-color')) {
+        box.style.color = readableTextColor(hex);
+    }
+    box.classList.add('has-custom-color');
+}
+
+function applyBoxTextColor(box, color) {
+    if (!box) return;
+    box.style.color = colorToHex(color);
+    box.classList.add('has-custom-text-color');
+}
+
+function applyHeadingColor(color) {
+    const heading = document.getElementById("heading");
+    if (!heading) return;
+    heading.style.background = colorToHex(color);
+    heading.dataset.customBackground = "true";
+}
+
+function applyHeadingTextColor(color) {
+    const heading = document.getElementById("heading");
+    const headingText = document.getElementById("headingText");
+    if (!heading || !headingText) return;
+    const hex = colorToHex(color);
+    heading.style.color = hex;
+    headingText.style.color = hex;
+    heading.dataset.customText = "true";
+}
+
+function resetHeadingStyle() {
+    const heading = document.getElementById("heading");
+    const headingText = document.getElementById("headingText");
+    if (!heading || !headingText) return;
+    heading.style.background = "";
+    heading.style.color = "";
+    headingText.style.color = "";
+    delete heading.dataset.customBackground;
+    delete heading.dataset.customText;
+    const headingColor = document.getElementById("headingColor");
+    const headingTextColor = document.getElementById("headingTextColor");
+    if (headingColor) headingColor.value = "#22C55E";
+    if (headingTextColor) headingTextColor.value = "#FFFFFF";
+}
+
+function getHeadingStylePayload() {
+    const heading = document.getElementById("heading");
+    const headingText = document.getElementById("headingText");
+    return {
+        backgroundColor: heading?.dataset.customBackground ? colorToHex(heading.style.backgroundColor || heading.style.background) : null,
+        color: heading?.dataset.customText ? colorToHex(headingText?.style.color || heading?.style.color || "") : null
+    };
+}
+
+function applyHeadingStylePayload(style = {}) {
+    resetHeadingStyle();
+    if (style?.backgroundColor) applyHeadingColor(style.backgroundColor);
+    if (style?.color) applyHeadingTextColor(style.color);
+}
+
+function initHeadingColorControls() {
+    const headingColor = document.getElementById("headingColor");
+    const headingTextColor = document.getElementById("headingTextColor");
+    if (!headingColor || !headingTextColor) return;
+
+    headingColor.addEventListener("input", event => applyHeadingColor(event.target.value));
+    headingColor.addEventListener("change", event => applyHeadingColor(event.target.value));
+    headingTextColor.addEventListener("input", event => applyHeadingTextColor(event.target.value));
+    headingTextColor.addEventListener("change", event => applyHeadingTextColor(event.target.value));
 }
 
 // --------------------------------------------------------------------------
@@ -194,6 +305,25 @@ function deleteBox(box) {
     });
     box.remove();
     boxes.delete(box.id);
+}
+
+function duplicateBox(box) {
+    if (!box) return null;
+    const [left, top] = getBoxCoords(box);
+    const duplicate = createNewBlock(left + 28, top + 28, getBoxText(box), { contentIsPlaceholder: false });
+
+    if (box.classList.contains('has-custom-color')) {
+        applyBoxCustomColor(duplicate, box.style.backgroundColor);
+    }
+
+    if (box.classList.contains('has-custom-text-color')) {
+        applyBoxTextColor(duplicate, box.style.color);
+    }
+
+    duplicate.style.width = box.style.width;
+    duplicate.style.height = box.style.height;
+    syncBoxPlaceholderState(duplicate);
+    return duplicate;
 }
 
 // --------------------------------------------------------------------------
@@ -564,7 +694,7 @@ document.addEventListener('click', function (event) {
     const textToolbar = document.getElementById("textToolbar");
     const treeMenu = document.getElementById("treeQuickMenu");
 
-    if (toolbar && !event.target.closest('#boxes')) {
+    if (toolbar && !event.target.closest('#boxes') && !event.target.closest('#toolbar')) {
         toolbar.style.display = 'none';
     }
 
@@ -590,21 +720,47 @@ document.addEventListener('click', function (event) {
  */
 function boxToolbarListeners() {
     // Event listener for the box color picker
-    document.getElementById("boxColor").addEventListener("change", (e) => {
-        const box = document.getElementById(e.target.parentNode.dataset.boxId);
-        box.style.backgroundColor = colorToHex(e.target.value);
+    const boxColorInput = document.getElementById("boxColor");
+    const boxTextColorInput = document.getElementById("boxTextColor");
+    const getToolbarBox = (target) => {
+        const toolbar = target.closest('#toolbar');
+        return document.getElementById(toolbar?.dataset.boxId || '');
+    };
+    const applyBoxColor = (e) => {
+        const box = getToolbarBox(e.target);
+        if (!box) return;
+        applyBoxCustomColor(box, e.target.value);
+    };
+    const applyTextColor = (e) => {
+        const box = getToolbarBox(e.target);
+        if (!box) return;
+        applyBoxTextColor(box, e.target.value);
+    };
+    boxColorInput.addEventListener("input", applyBoxColor);
+    boxColorInput.addEventListener("change", applyBoxColor);
+    boxColorInput.addEventListener("click", event => {
+        event.stopPropagation();
+    });
+    boxTextColorInput.addEventListener("input", applyTextColor);
+    boxTextColorInput.addEventListener("change", applyTextColor);
+    boxTextColorInput.addEventListener("click", event => {
+        event.stopPropagation();
     });
 
     // Event listener for the "addBox" button
     document.getElementById("addBox").addEventListener("click", e => {
-        const box = document.getElementById(e.target.parentNode.dataset.boxId);
+        const box = getToolbarBox(e.target);
         addBlock(box);
     });
 
     // Event listener for the "deleteBox" button
     document.getElementById("deleteBox").addEventListener("click", e => {
-        const box = document.getElementById(e.target.parentNode.dataset.boxId);
+        const box = getToolbarBox(e.target);
         deleteBox(box);
+    });
+
+    document.getElementById("duplicateBox").addEventListener("click", e => {
+        duplicateBox(getToolbarBox(e.target));
     });
 }
 
@@ -742,6 +898,18 @@ function colorToHex(color) {
  */
 function rgbToHex(r, g, b) {
     return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1).toUpperCase()}`;
+}
+
+function readableTextColor(color) {
+    const hex = colorToHex(color);
+    const expandedHex = hex.length === 4
+        ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+        : hex;
+    const red = parseInt(expandedHex.slice(1, 3), 16) / 255;
+    const green = parseInt(expandedHex.slice(3, 5), 16) / 255;
+    const blue = parseInt(expandedHex.slice(5, 7), 16) / 255;
+    const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    return luminance > 0.55 ? "#111827" : "#F8FAFC";
 }
 
 /**
@@ -929,6 +1097,47 @@ function getSpeechRecognitionCtor() {
     return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
+function getDictationPreferences() {
+    return {
+        language: document.getElementById('dictation-language')?.value || '',
+        continuous: document.getElementById('dictation-continuous')?.checked !== false,
+        interim: document.getElementById('dictation-interim')?.checked !== false
+    };
+}
+
+function saveDictationPreferences() {
+    try {
+        localStorage.setItem(DICTATION_PREFS_STORAGE_KEY, JSON.stringify(getDictationPreferences()));
+    } catch (_) {
+        // Keep browser defaults if localStorage is unavailable.
+    }
+}
+
+function initDictationPreferences() {
+    const languageSelect = document.getElementById('dictation-language');
+    const continuousToggle = document.getElementById('dictation-continuous');
+    const interimToggle = document.getElementById('dictation-interim');
+    const testButton = document.getElementById('dictationTestBtn');
+
+    try {
+        const saved = JSON.parse(localStorage.getItem(DICTATION_PREFS_STORAGE_KEY) || '{}');
+        if (languageSelect && typeof saved.language === 'string') languageSelect.value = saved.language;
+        if (continuousToggle && typeof saved.continuous === 'boolean') continuousToggle.checked = saved.continuous;
+        if (interimToggle && typeof saved.interim === 'boolean') interimToggle.checked = saved.interim;
+    } catch (_) {
+        // Ignore malformed saved state.
+    }
+
+    languageSelect?.addEventListener('change', saveDictationPreferences);
+    continuousToggle?.addEventListener('change', saveDictationPreferences);
+    interimToggle?.addEventListener('change', saveDictationPreferences);
+    testButton?.addEventListener('click', () => {
+        const button = document.getElementById('dictateToggle');
+        if (isDictating) stopDictation('Dictation stopped.');
+        else startDictation(button);
+    });
+}
+
 function setDictationActive(active, dictateButton = document.getElementById('dictateToggle')) {
     isDictating = active;
     if (dictateButton) {
@@ -962,9 +1171,10 @@ function startDictation(dictateButton) {
     }
 
     dictationRecognition = new Recognition();
-    dictationRecognition.lang = navigator.language || 'en-US';
-    dictationRecognition.continuous = true;
-    dictationRecognition.interimResults = true;
+    const preferences = getDictationPreferences();
+    dictationRecognition.lang = preferences.language || navigator.language || 'en-US';
+    dictationRecognition.continuous = preferences.continuous;
+    dictationRecognition.interimResults = preferences.interim;
 
     dictationRecognition.onstart = () => {
         setDictationActive(true, dictateButton);
@@ -1013,9 +1223,7 @@ function gatherCornellNotes() {
         noteBody = Array.from(boxesWrapper.querySelectorAll('.box'))
             .map(box => {
                 const id = box.id ? `#${box.id}` : '';
-                const text = box.cloneNode(true);
-                text.querySelector('.boxFooter')?.remove();
-                return `Box ${id}`.trim() + ': ' + text.textContent.trim();
+                return `Box ${id}`.trim() + ': ' + getBoxText(box);
             })
             .join('\n');
     }
@@ -1148,31 +1356,44 @@ function structuredDataFromResponse(data) {
     if (typeof data.analysis !== 'string') return data;
     const raw = data.analysis.trim();
     if (!raw.startsWith('{') && !raw.startsWith('```')) return data;
+    const normalizeParsed = (parsed) => {
+        if (typeof parsed === 'string') {
+            try {
+                parsed = JSON.parse(parsed);
+            } catch (_) {
+                return { ...data, analysis: '', message: data.message || 'The model returned malformed JSON. Please retry analysis.' };
+            }
+        }
+        if (parsed?.analysis && typeof parsed.analysis === 'object' && !parsed.overview) {
+            parsed = parsed.analysis;
+        }
+        if (parsed && typeof parsed === 'object') {
+            const safeAnalysis = typeof parsed.analysis === 'string' && !parsed.analysis.trim().startsWith('{')
+                ? parsed.analysis
+                : '';
+            return { ...data, ...parsed, analysis: safeAnalysis };
+        }
+        return { ...data, analysis: '', message: data.message || 'The model returned malformed JSON. Please retry analysis.' };
+    };
     const cleaned = raw
         .replace(/^```json\s*/i, '')
         .replace(/^```\s*/i, '')
         .replace(/\s*```$/i, '')
         .trim();
     try {
-        const parsed = JSON.parse(cleaned);
-        if (parsed && typeof parsed === 'object') {
-            return { ...data, ...parsed, analysis: data.analysis };
-        }
+        return normalizeParsed(JSON.parse(cleaned));
     } catch (_) {
         const start = cleaned.indexOf('{');
         const end = cleaned.lastIndexOf('}');
         if (start !== -1 && end > start) {
             try {
-                const parsed = JSON.parse(cleaned.slice(start, end + 1));
-                if (parsed && typeof parsed === 'object') {
-                    return { ...data, ...parsed, analysis: data.analysis };
-                }
+                return normalizeParsed(JSON.parse(cleaned.slice(start, end + 1)));
             } catch (__) {
-                return data;
+                return { ...data, analysis: '', message: data.message || 'The model returned malformed JSON. Please retry analysis.' };
             }
         }
     }
-    return data;
+    return { ...data, analysis: '', message: data.message || 'The model returned malformed JSON. Please retry analysis.' };
 }
 
 function renderConceptsAndSuggestions(data) {
@@ -1293,7 +1514,7 @@ function renderConceptsAndSuggestions(data) {
             a.href = link.url || '#';
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
-            a.textContent = link.title || link.url || 'External Link';
+            a.textContent = `${link.favicon ? `${link.favicon} ` : ''}${link.title || link.url || 'External Link'}`;
             a.style.textDecoration = 'underline';
             a.style.wordBreak = 'break-word';
 
@@ -1310,16 +1531,33 @@ function renderConceptsAndSuggestions(data) {
     if (videosSection && videosList && videoLinks.length) {
         for (const link of videoLinks) {
             const item = document.createElement('li');
-            item.className = 'suggested-link-item';
+            item.className = 'suggested-link-item video-link-item';
             item.style.marginBottom = '8px';
 
             const a = document.createElement('a');
             a.href = link.url || '#';
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
-            a.textContent = link.title || link.url || 'Video';
+            a.className = 'video-link-item__anchor';
             a.style.textDecoration = 'underline';
             a.style.wordBreak = 'break-word';
+            if (link.thumbnail) {
+                const img = document.createElement('img');
+                img.className = 'video-link-item__thumbnail';
+                img.src = link.thumbnail;
+                img.alt = '';
+                img.loading = 'lazy';
+                a.appendChild(img);
+            }
+            const label = document.createElement('span');
+            label.textContent = link.title || link.url || 'Video';
+            a.appendChild(label);
+            if (link.channel) {
+                const channel = document.createElement('span');
+                channel.className = 'video-link-item__channel';
+                channel.textContent = link.channel;
+                a.appendChild(channel);
+            }
 
             item.appendChild(a);
             videosList.appendChild(item);
@@ -1334,7 +1572,10 @@ function getAiPreferences() {
     const provider = document.getElementById('llm-provider')?.value || 'auto';
     const model = document.getElementById('llm-model')?.value || '';
     const proMode = !!document.getElementById('pro-mode')?.checked;
-    return { provider, model, proMode };
+    const geminiApiKey = document.getElementById('gemini-api-key')?.value.trim() || '';
+    const openaiApiKey = document.getElementById('openai-api-key')?.value.trim() || '';
+    const ollamaBaseUrl = document.getElementById('ollama-base-url')?.value.trim() || '';
+    return { provider, model, proMode, geminiApiKey, openaiApiKey, ollamaBaseUrl };
 }
 
 function saveAiPreferences() {
@@ -1363,6 +1604,9 @@ function initAiPreferences() {
     const providerSelect = document.getElementById('llm-provider');
     const modelSelect = document.getElementById('llm-model');
     const proToggle = document.getElementById('pro-mode');
+    const geminiKeyInput = document.getElementById('gemini-api-key');
+    const openaiKeyInput = document.getElementById('openai-api-key');
+    const ollamaUrlInput = document.getElementById('ollama-base-url');
     if (!providerSelect || !modelSelect || !proToggle) return;
 
     try {
@@ -1370,6 +1614,9 @@ function initAiPreferences() {
         if (typeof saved.provider === 'string') providerSelect.value = saved.provider;
         if (typeof saved.model === 'string') modelSelect.value = saved.model;
         proToggle.checked = !!saved.proMode;
+        if (geminiKeyInput && typeof saved.geminiApiKey === 'string') geminiKeyInput.value = saved.geminiApiKey;
+        if (openaiKeyInput && typeof saved.openaiApiKey === 'string') openaiKeyInput.value = saved.openaiApiKey;
+        if (ollamaUrlInput && typeof saved.ollamaBaseUrl === 'string') ollamaUrlInput.value = saved.ollamaBaseUrl;
     } catch (_) {
         // Ignore malformed saved state and keep defaults.
     }
@@ -1381,6 +1628,48 @@ function initAiPreferences() {
     });
     modelSelect.addEventListener('change', saveAiPreferences);
     proToggle.addEventListener('change', saveAiPreferences);
+    geminiKeyInput?.addEventListener('change', saveAiPreferences);
+    openaiKeyInput?.addEventListener('change', saveAiPreferences);
+    ollamaUrlInput?.addEventListener('change', saveAiPreferences);
+}
+
+function initUiLanguagePreference() {
+    const languageSelect = document.getElementById('ui-language');
+    if (!languageSelect) return;
+
+    try {
+        languageSelect.value = localStorage.getItem(UI_LANGUAGE_STORAGE_KEY) || 'en';
+    } catch (_) {
+        languageSelect.value = 'en';
+    }
+
+    languageSelect.addEventListener('change', () => {
+        try {
+            localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, languageSelect.value);
+        } catch (_) {}
+        if (languageSelect.value !== 'en') {
+            setStatusMessage('This beta currently supports English UI text only.', 'info');
+            languageSelect.value = 'en';
+        }
+    });
+}
+
+function initFeedbackControls() {
+    const feedbackButton = document.getElementById('feedback');
+    const feedbackDialog = document.getElementById('feedbackDialog');
+    const emailButton = document.getElementById('feedbackEmailBtn');
+    const forumButton = document.getElementById('feedbackForumBtn');
+
+    feedbackButton?.addEventListener('click', () => feedbackDialog?.showModal());
+    emailButton?.addEventListener('click', () => {
+        const message = document.getElementById('feedbackMessage')?.value.trim() || '';
+        const subject = encodeURIComponent('TreeNotes beta feedback');
+        const body = encodeURIComponent(message || 'Feedback: ');
+        window.location.href = `mailto:treenotes.feedback@example.com?subject=${subject}&body=${body}`;
+    });
+    forumButton?.addEventListener('click', () => {
+        setStatusMessage('Forums/Discord link is not configured in this beta build.', 'info');
+    });
 }
 
 function openInsightsPanel(panel) {
@@ -1411,6 +1700,11 @@ function resetAnalysisContent(contentEl) {
     if (videosSection) videosSection.hidden = true;
 }
 
+function setAnalysisPanelTitle(title) {
+    const titleEl = document.querySelector('#analysisPanel .analysis-panel__title');
+    if (titleEl) titleEl.textContent = title;
+}
+
 function clearAnalysisPanel(panel, contentEl) {
     closeInsightsPanel(panel);
     resetAnalysisContent(contentEl);
@@ -1423,7 +1717,8 @@ async function analyzeNotesWithLLM() {
 
     if (!analyzeBtn || !panel || !contentEl) return;
 
-    const body = apiBodyFromCanvas();
+    setAnalysisPanelTitle('LLM Insights');
+    const body = aiAnalyzeBodyFromCanvas();
 
     analyzeBtn.disabled = true;
     analyzeBtn.classList.add('is-active');
@@ -1486,9 +1781,74 @@ async function analyzeNotesWithLLM() {
     }
 }
 
+function buildCoachQuestions() {
+    const notes = gatherCornellNotes();
+    const text = [
+        notes.heading,
+        notes.cues,
+        notes.notes,
+        notes.summary
+    ].filter(Boolean).join('\n');
+    const boxTerms = [...boxes.values()]
+        .map(({ box }) => getBoxText(box))
+        .filter(Boolean)
+        .slice(0, 4);
+    const questions = [];
+
+    if (notes.summary) {
+        questions.push({
+            prompt: 'Explain the main idea of these notes in your own words.',
+            explanation: 'Good recall starts with a concise summary before checking details.'
+        });
+    }
+
+    for (const term of boxTerms) {
+        questions.push({
+            prompt: `What does “${term}” connect to, and why is that connection useful?`,
+            explanation: 'Coach Mode focuses on reasoning about links between note cells, not punishment for wrong answers.'
+        });
+    }
+
+    if (text) {
+        questions.push({
+            prompt: 'Name one weak spot or missing detail that would improve these notes.',
+            explanation: 'This turns review into active note improvement, similar to a study coach.'
+        });
+    }
+
+    return questions.slice(0, 6);
+}
+
+function showCoachMode() {
+    const coachButton = document.getElementById('coachModeBtn');
+    const panel = document.getElementById('analysisPanel');
+    const contentEl = document.getElementById('analysisContent');
+    if (!panel || !contentEl) return;
+
+    resetAnalysisContent(contentEl);
+    setAnalysisPanelTitle('Coach Mode 🧠');
+    const questions = buildCoachQuestions();
+    contentEl.innerHTML = questions.length
+        ? `<p><strong>Study coach preview.</strong> Answer these mentally or aloud, then open each explanation.</p>
+           <ol class="coach-question-list">${questions.map((item, index) => `
+              <li class="coach-question">
+                  <p>${escapeHtml(item.prompt)}</p>
+                  <details>
+                      <summary>Explanation</summary>
+                      <p>${escapeHtml(item.explanation)}</p>
+                  </details>
+              </li>`).join('')}</ol>`
+        : '<p><strong>Coach Mode 🧠</strong></p><p>Add cue text, summary text, or seed cells first. Future AI Coach Mode can then quiz your content for retention with explanations.</p>';
+    openInsightsPanel(panel);
+    coachButton?.classList.add('is-active');
+    setTimeout(() => coachButton?.classList.remove('is-active'), 800);
+    setStatusMessage('Coach Mode opened.', 'info');
+}
+
 function initToolbarAssistControls() {
     const dictateButton = document.getElementById('dictateToggle');
     const analyzeButton = document.getElementById('analyzeNotesBtn');
+    const coachButton = document.getElementById('coachModeBtn');
     const closeAnalysis = document.getElementById('closeAnalysis');
     const panel = document.getElementById('analysisPanel');
     const contentEl = document.getElementById('analysisContent');
@@ -1509,10 +1869,15 @@ function initToolbarAssistControls() {
         analyzeButton.addEventListener('click', analyzeNotesWithLLM);
     }
 
+    if (coachButton) {
+        coachButton.addEventListener('click', showCoachMode);
+    }
+
     if (closeAnalysis && panel && contentEl) {
         closeAnalysis.addEventListener('click', (event) => {
             event.stopPropagation();
             clearAnalysisPanel(panel, contentEl);
+            setAnalysisPanelTitle('LLM Insights');
             setStatusMessage('', 'info');
         });
     }
@@ -1568,6 +1933,9 @@ function getApiBase() {
     const fromQuery = params.get('api');
     if (fromQuery) return fromQuery.replace(/\/$/, '');
 
+    const stored = localStorage.getItem(TREENOTES_API_BASE_KEY);
+    if (stored) return stored.replace(/\/$/, '');
+
     const meta = document.querySelector('meta[name="treenotes-api-base"]');
     if (meta?.content?.trim()) {
         const c = meta.content.trim();
@@ -1577,8 +1945,6 @@ function getApiBase() {
         return c.replace(/\/$/, '');
     }
 
-    const stored = localStorage.getItem(TREENOTES_API_BASE_KEY);
-    if (stored) return stored.replace(/\/$/, '');
     if (typeof window.TREENOTES_API_BASE === 'string' && window.TREENOTES_API_BASE.trim()) {
         return window.TREENOTES_API_BASE.trim().replace(/\/$/, '');
     }
@@ -1617,15 +1983,17 @@ function replaceUrlNoteParam(noteId) {
 function collectNotebookPayload() {
     return {
         heading: document.getElementById("headingText").innerText.trim(),
+        headingStyle: getHeadingStylePayload(),
         cueText: document.getElementById("cueText").innerText.trim(),
         summary: document.getElementById("notesText").innerText.trim(),
         boxes: [...boxes.entries()].map(([id, { box, lines }]) => ({
             id,
-            content: box.childNodes[0]?.textContent?.trim() || "",
+            content: getBoxText(box),
             style: {
                 left: box.style.left,
                 top: box.style.top,
-                backgroundColor: box.style.backgroundColor
+                backgroundColor: box.classList.contains('has-custom-color') ? box.style.backgroundColor : null,
+                color: box.classList.contains('has-custom-text-color') ? box.style.color : null
             },
             lines: lines.map(String)
         }))
@@ -1634,29 +2002,42 @@ function collectNotebookPayload() {
 
 function apiBodyFromCanvas() {
     const raw = collectNotebookPayload();
-    const aiPrefs = getAiPreferences();
     return {
         heading: raw.heading,
+        headingStyle: raw.headingStyle,
         cueText: raw.cueText,
         summary: raw.summary,
-        llm_provider: aiPrefs.provider,
-        llm_model: aiPrefs.model,
-        pro_mode: aiPrefs.proMode,
         boxes: raw.boxes.map(b => ({
             id: Number(b.id),
             content: b.content,
             style: {
                 left: b.style.left || '0px',
                 top: b.style.top || '20px',
-                backgroundColor: b.style.backgroundColor || null
+                backgroundColor: b.style.backgroundColor || null,
+                color: b.style.color || null
             },
             lines: (b.lines || []).map(String)
         }))
     };
 }
 
+function aiAnalyzeBodyFromCanvas() {
+    const body = apiBodyFromCanvas();
+    const aiPrefs = getAiPreferences();
+    return {
+        ...body,
+        llm_provider: aiPrefs.provider,
+        llm_model: aiPrefs.model,
+        pro_mode: aiPrefs.proMode,
+        gemini_api_key: aiPrefs.geminiApiKey,
+        openai_api_key: aiPrefs.openaiApiKey,
+        ollama_base_url: aiPrefs.ollamaBaseUrl
+    };
+}
+
 function applyImportedData(data) {
     document.getElementById("headingText").innerText = data.heading || "";
+    applyHeadingStylePayload(data.headingStyle || {});
     document.getElementById("cueText").innerText = data.cueText || "";
     document.getElementById("notesText").innerText = data.summary || "";
     // Programmatic innerText assignments above don't fire `input`, so the
@@ -1672,10 +2053,20 @@ function applyImportedData(data) {
     (data.boxes || []).forEach(({ id, content, style, lines }) => {
         const left = parseInt(style?.left, 10) || 0;
         const top = parseInt(style?.top, 10) || 0;
-        const newBox = createNewBlock(left, top, content, { id });
+        const newBox = createNewBlock(left, top, content, { id, contentIsPlaceholder: false });
 
         if (style?.backgroundColor) {
-            newBox.style.backgroundColor = style.backgroundColor;
+            if (colorToHex(style.backgroundColor) !== '#F1F1F1') {
+                applyBoxCustomColor(newBox, style.backgroundColor);
+            } else {
+                newBox.style.backgroundColor = '';
+                newBox.style.color = '';
+                newBox.classList.remove('has-custom-color');
+            }
+        }
+
+        if (style?.color) {
+            applyBoxTextColor(newBox, style.color);
         }
 
         const entry = boxes.get(newBox.id);
@@ -1793,6 +2184,7 @@ function openApiNotesDialog() {
 
 function newBlankNotebook() {
     document.getElementById("headingText").innerText = "";
+    resetHeadingStyle();
     document.getElementById("cueText").innerText = "";
     document.getElementById("notesText").innerText = "";
     refreshPlaceholderState(['headingText', 'cueText', 'notesText']);
@@ -1820,6 +2212,8 @@ function initApiIntegration() {
     document.getElementById('apiSaveBtn')?.addEventListener('click', () => void saveNotebookToApi());
     document.getElementById('apiOpenBtn')?.addEventListener('click', () => openApiNotesDialog());
     document.getElementById('apiNewBtn')?.addEventListener('click', () => newBlankNotebook());
+    document.getElementById('localSaveBtn')?.addEventListener('click', () => download());
+    document.getElementById('localOpenBtn')?.addEventListener('click', () => upload());
     document.getElementById('apiOpenRefresh')?.addEventListener('click', () => void fetchNotesListForDialog());
     document.getElementById('apiOpenCancel')?.addEventListener('click', () => {
         document.getElementById('apiOpenDialog')?.close();
@@ -1916,7 +2310,7 @@ function refreshPlaceholderState(idsOrEls) {
 }
 
 function setupEditablePlaceholders() {
-    const editables = document.querySelectorAll('[contenteditable][data-placeholder]');
+    const editables = document.querySelectorAll('[contenteditable][data-placeholder]:not(.box)');
     editables.forEach(el => {
         syncPlaceholderState(el);
 
@@ -2067,11 +2461,15 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEditablePlaceholders();
     setupPlainTextPaste();
     setupDictationTargetTracking();
+    initDictationPreferences();
     initGridToggle();
     initTreePanning();
     initTreeMenu();
     initToolbarAssistControls();
+    initHeadingColorControls();
     initAiPreferences();
+    initUiLanguagePreference();
+    initFeedbackControls();
     initResizer();
     initApiIntegration();
 

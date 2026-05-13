@@ -18,25 +18,42 @@
             <header class="menu-header">📘 TreeNotes</header>
 
             <section class="menu-section menu-section--actions">
-                <button type="button" class="menu-action-btn" id="toggleDarkMode">
-                    <span class="menu-action-btn__icon" aria-hidden="true">🌓</span>
-                    <span>Toggle Dark Mode</span>
+                <button type="button" class="menu-action-btn" id="apiNewBtn">
+                    <span class="menu-action-btn__icon" aria-hidden="true">📄</span>
+                    <span>New</span>
                 </button>
-                <button type="button" class="menu-action-btn" id="help">
-                    <span class="menu-action-btn__icon" aria-hidden="true">❓</span>
-                    <span>Help</span>
+                <button type="button" class="menu-action-btn" id="apiOpenBtn">
+                    <span class="menu-action-btn__icon" aria-hidden="true">☁️</span>
+                    <span>Cloud Load/Open</span>
                 </button>
-                <button type="button" class="menu-action-btn" id="about">
-                    <span class="menu-action-btn__icon" aria-hidden="true">ℹ️</span>
-                    <span>About</span>
+                <button type="button" class="menu-action-btn" id="apiSaveBtn">
+                    <span class="menu-action-btn__icon" aria-hidden="true">☁️</span>
+                    <span>Cloud Save</span>
                 </button>
+                <button type="button" class="menu-action-btn" id="localOpenBtn">
+                    <span class="menu-action-btn__icon" aria-hidden="true">⬆️</span>
+                    <span>Local Load/Open</span>
+                </button>
+                <button type="button" class="menu-action-btn" id="localSaveBtn">
+                    <span class="menu-action-btn__icon" aria-hidden="true">💾</span>
+                    <span>Local Save</span>
+                </button>
+                <span id="apiNoteIndicator" class="api-note-indicator" title="Current server note id" hidden></span>
             </section>
 
             <hr class="menu-divider" />
 
-            <section class="menu-section menu-section--field">
+            <section class="menu-section menu-section--actions">
+                <button type="button" class="menu-action-btn" id="toggleDarkMode">
+                    <span class="menu-action-btn__icon" aria-hidden="true">🌓</span>
+                    <span>Toggle Light/Dark Mode</span>
+                </button>
+            </section>
+
+            <details class="menu-section menu-section--details" id="aiSettingsDetails" open>
+                <summary class="menu-details-summary">AI Settings</summary>
                 <label class="menu-label" for="llm-provider">AI provider</label>
-                <select class="menu-input" id="llm-provider" title="Backend API keys stay on the server.">
+                <select class="menu-input" id="llm-provider" title="Keys can stay server-side or be supplied locally for analysis requests.">
                     <option value="auto">Server default</option>
                     <option value="gemini">Gemini</option>
                     <option value="openai">OpenAI</option>
@@ -50,35 +67,82 @@
                     <option value="gpt-5.2" data-provider="openai">OpenAI GPT-5.2</option>
                     <option value="llama3" data-provider="ollama">Ollama llama3</option>
                 </select>
-                <p class="menu-hint">Choose a server-enabled provider. OpenAI uses <code>OPENAI_API_KEY</code> on the backend.</p>
-            </section>
+                <label class="menu-label" for="gemini-api-key">Gemini API key</label>
+                <input type="password" class="menu-input" id="gemini-api-key" placeholder="Optional; stored in this browser" autocomplete="off">
+                <label class="menu-label" for="openai-api-key">OpenAI API key</label>
+                <input type="password" class="menu-input" id="openai-api-key" placeholder="Optional; stored in this browser" autocomplete="off">
+                <label class="menu-label" for="ollama-base-url">Ollama URL</label>
+                <input type="url" class="menu-input" id="ollama-base-url" placeholder="http://127.0.0.1:11434" autocomplete="off">
+                <label class="menu-label" for="api-base-url">Backend API URL</label>
+                <input type="url" class="menu-input" id="api-base-url" placeholder="http://127.0.0.1:8000" autocomplete="off">
+                <p class="menu-hint">Keys are sent only to the backend analysis endpoint, not saved inside note files.</p>
+            </details>
 
             <section class="menu-section menu-section--toggle">
                 <label class="menu-toggle">
                     <input type="checkbox" id="pro-mode">
-                    <span>Pro Mode</span>
+                    <span>Quick Pro Mode Toggle</span>
                 </label>
-                <p class="menu-hint">Prioritizes highly reputable academic and scientific sources.</p>
+                <p class="menu-hint">Tells AI to prioritize high-authority academic, scientific, government, medical, legal, and publisher sources.</p>
+            </section>
+
+            <details class="menu-section menu-section--details" id="dictationSettingsDetails">
+                <summary class="menu-details-summary">Dictation Settings</summary>
+                <label class="menu-label" for="dictation-language">Speech language</label>
+                <select class="menu-input" id="dictation-language">
+                    <option value="">Browser default</option>
+                    <option value="en-AU">English (Australia)</option>
+                    <option value="en-US">English (US)</option>
+                    <option value="en-GB">English (UK)</option>
+                    <option value="es-ES">Spanish</option>
+                    <option value="fr-FR">French</option>
+                    <option value="zh-CN">Chinese (Mandarin)</option>
+                    <option value="ar-SA">Arabic</option>
+                    <option value="hi-IN">Hindi</option>
+                </select>
+                <label class="menu-toggle">
+                    <input type="checkbox" id="dictation-continuous" checked>
+                    <span>Continuous listening</span>
+                </label>
+                <label class="menu-toggle">
+                    <input type="checkbox" id="dictation-interim" checked>
+                    <span>Use interim recognition</span>
+                </label>
+                <button type="button" class="menu-action-btn" id="dictationTestBtn">
+                    <span class="menu-action-btn__icon" aria-hidden="true">🎙️</span>
+                    <span>Test Dictation</span>
+                </button>
+                <p class="menu-hint">Uses browser speech recognition and the current system microphone.</p>
+            </details>
+
+            <section class="menu-section menu-section--field">
+                <label class="menu-label" for="ui-language">UI Language</label>
+                <select class="menu-input" id="ui-language">
+                    <option value="en">English</option>
+                    <option value="es" disabled>Spanish (coming soon)</option>
+                    <option value="fr" disabled>French (coming soon)</option>
+                    <option value="zh" disabled>Chinese (coming soon)</option>
+                    <option value="ar" disabled>Arabic (coming soon)</option>
+                    <option value="hi" disabled>Hindi (coming soon)</option>
+                </select>
+                <p class="menu-hint">English is active. More interface languages can be added later.</p>
             </section>
 
             <hr class="menu-divider" />
 
-            <section class="menu-section menu-section--field menu-api-row">
-                <label class="menu-label" for="api-base-url">API URL</label>
-                <input type="url" class="menu-input" id="api-base-url"
-                       placeholder="http://127.0.0.1:8000" autocomplete="off">
-                <span id="apiNoteIndicator" class="api-note-indicator" title="Current server note id" hidden></span>
-                <div class="menu-api-actions">
-                    <button type="button" class="menu-api-btn" id="apiSaveBtn" title="Save to server (API)">
-                        <span aria-hidden="true">☁️</span> Save
-                    </button>
-                    <button type="button" class="menu-api-btn" id="apiOpenBtn" title="Open from server">
-                        <span aria-hidden="true">📂</span> Open
-                    </button>
-                    <button type="button" class="menu-api-btn" id="apiNewBtn" title="New local note">
-                        <span aria-hidden="true">📄</span> New
-                    </button>
-                </div>
+            <section class="menu-section menu-section--actions">
+                <button type="button" class="menu-action-btn" id="about">
+                    <span class="menu-action-btn__icon" aria-hidden="true">ℹ️</span>
+                    <span>About</span>
+                </button>
+                <button type="button" class="menu-action-btn" id="help">
+                    <span class="menu-action-btn__icon" aria-hidden="true">❓</span>
+                    <span>Help</span>
+                </button>
+                <button type="button" class="menu-action-btn" id="feedback">
+                    <span class="menu-action-btn__icon" aria-hidden="true">💬</span>
+                    <span>Send Feedback</span>
+                </button>
             </section>
         </div>
     </div>
@@ -90,6 +154,16 @@
     <main id="cornellLayout">
         <div id="heading" class="cornell-heading">
             <div id="headingText" contenteditable="true" data-placeholder="Cornell Note Heading"></div>
+            <div class="heading-color-controls" contenteditable="false" aria-label="Heading color controls">
+                <label class="heading-color-button" title="Change Heading Color">
+                    <span>Heading</span>
+                    <input id="headingColor" type="color" value="#22c55e" aria-label="Change Heading Color">
+                </label>
+                <label class="heading-color-button" title="Change Heading Text Color">
+                    <span>Text</span>
+                    <input id="headingTextColor" type="color" value="#ffffff" aria-label="Change Heading Text Color">
+                </label>
+            </div>
         </div>
 
         <div class="cornell-body">
@@ -108,6 +182,7 @@
                 <button class="button" id="gridToggle" aria-pressed="false" title="Toggle guide grid">#️⃣</button>
                 <button class="button" id="dictateToggle" aria-pressed="false" title="Toggle dictation">🎙️</button>
                 <button class="button" id="analyzeNotesBtn" title="Analyze notes via API">🤖</button>
+                <button class="button" id="coachModeBtn" title="Coach Mode study quiz">🧠</button>
                 <button class="button" onclick="download()" title="Download notes">💾</button>
                 <button class="button" onclick="upload()" title="Upload notes">⬆️</button>
                 <button class="button" onclick="noteInfo()" title="Note info">📝</button>
@@ -125,7 +200,7 @@
 
                     <div id="zoom" class="zoom">
                         <div id="boxes">
-                            <div id="1" class="box" contenteditable="true" style="background-color: #f1f1f1;">Seed</div>
+                            <div id="1" class="box" contenteditable="true" data-placeholder="Seed"></div>
                         </div>
                         <svg id="lines"></svg>
                     </div>
@@ -175,11 +250,19 @@
     </aside>
 
     <div id="toolbar" class="toolbar">
-        <input id="boxColor" type="color" aria-label="Box Color">
-        <button id="addBox">Add Box+</button>
-        <button id="deleteBox">Delete Box🗑️</button>
+        <label class="toolbar-color-button" title="Change Cell Color">
+            <span>Cell</span>
+            <input id="boxColor" type="color" aria-label="Change Cell Color">
+        </label>
+        <label class="toolbar-color-button" title="Change Text Color">
+            <span>Text</span>
+            <input id="boxTextColor" type="color" aria-label="Change Text Color">
+        </label>
+        <button id="addBox" type="button">+ Add Box</button>
+        <button id="deleteBox" type="button">− Delete Box</button>
+        <button id="duplicateBox" type="button">* Duplicate Box</button>
         <div id="link" class="dropdown">
-            <button class="dropdown-button">Link 🖇️</button>
+            <button class="dropdown-button" type="button">Link System</button>
             <div class="dropdown-content"></div>
         </div>
     </div>
@@ -224,6 +307,22 @@
             </div>
             <div class="api-open-dialog__actions">
                 <button type="button" onclick="document.getElementById('aboutDialog').close()">Close</button>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="feedbackDialog" class="api-open-dialog">
+        <div class="api-open-dialog__inner">
+            <header class="api-open-dialog__header">Send Feedback</header>
+            <div style="padding: 1rem 0; line-height: 1.5;">
+                <label class="menu-label" for="feedbackMessage">Message for the development team</label>
+                <textarea id="feedbackMessage" class="menu-input" rows="6" placeholder="Describe the issue, idea, or workflow you want improved."></textarea>
+                <p class="menu-hint">This beta build opens your email app with the message. Forums/Discord links can be added when available.</p>
+            </div>
+            <div class="api-open-dialog__actions">
+                <button type="button" id="feedbackEmailBtn">Open Email</button>
+                <button type="button" id="feedbackForumBtn">Forums/Discord</button>
+                <button type="button" onclick="document.getElementById('feedbackDialog').close()">Close</button>
             </div>
         </div>
     </dialog>

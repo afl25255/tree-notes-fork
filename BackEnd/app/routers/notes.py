@@ -32,7 +32,7 @@ def list_notes(session: Session = Depends(get_session)) -> list[NoteSummary]:
     ]
 
 
-@router.post("", response_model=NoteDocument, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=NoteDocument, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
 def create_note(
     session: Session = Depends(get_session),
     body: Optional[NoteCreate] = Body(default=None),
@@ -41,6 +41,8 @@ def create_note(
     _validate_box_ids(payload)
     note = Note(
         heading=payload.heading,
+        heading_background_color=payload.headingStyle.backgroundColor if payload.headingStyle else None,
+        heading_text_color=payload.headingStyle.color if payload.headingStyle else None,
         cue_text=payload.cueText,
         summary_text=payload.summary,
         created_at=utcnow(),
@@ -54,7 +56,7 @@ def create_note(
     return note_to_document(note, session)
 
 
-@router.get("/{note_id}", response_model=NoteDocument)
+@router.get("/{note_id}", response_model=NoteDocument, response_model_exclude_none=True)
 def get_note(note_id: UUID, session: Session = Depends(get_session)) -> NoteDocument:
     note = get_note_or_none(session, note_id)
     if note is None:
@@ -62,7 +64,7 @@ def get_note(note_id: UUID, session: Session = Depends(get_session)) -> NoteDocu
     return note_to_document(note, session)
 
 
-@router.put("/{note_id}", response_model=NoteDocument)
+@router.put("/{note_id}", response_model=NoteDocument, response_model_exclude_none=True)
 def replace_note(
     note_id: UUID,
     body: NoteUpdate,

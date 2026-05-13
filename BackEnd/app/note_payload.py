@@ -28,6 +28,8 @@ def edges_from_boxes(boxes: list[BoxInOut]) -> set[tuple[int, int]]:
 
 def apply_note_payload(note: Note, payload: NoteUpdate, session: Session) -> None:
     note.heading = payload.heading
+    note.heading_background_color = payload.headingStyle.backgroundColor if payload.headingStyle else None
+    note.heading_text_color = payload.headingStyle.color if payload.headingStyle else None
     note.cue_text = payload.cueText
     note.summary_text = payload.summary
     note.updated_at = utcnow()
@@ -48,6 +50,7 @@ def apply_note_payload(note: Note, payload: NoteUpdate, session: Session) -> Non
                 left=style.left,
                 top=style.top,
                 background_color=style.backgroundColor,
+                text_color=style.color,
             )
         )
 
@@ -81,14 +84,23 @@ def note_to_document(note: Note, session: Session) -> NoteDocument:
                     left=b.left,
                     top=b.top,
                     backgroundColor=b.background_color,
+                    color=b.text_color,
                 ),
                 lines=[str(x) for x in sorted(nbrs)],
             )
         )
 
+    heading_style = None
+    if note.heading_background_color or note.heading_text_color:
+        heading_style = {
+            "backgroundColor": note.heading_background_color,
+            "color": note.heading_text_color,
+        }
+
     return NoteDocument(
         id=note.id,
         heading=note.heading,
+        headingStyle=heading_style,
         cueText=note.cue_text,
         summary=note.summary_text,
         boxes=boxes_out,

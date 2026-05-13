@@ -1,6 +1,6 @@
 """Server-side note analysis: Gemini, optional Ollama, or placeholder (switch via env).
 
-The model is asked for a strict JSON object with five fields:
+The model is asked for a strict JSON object with six fields:
   - overview: notable bullet-point insights for the insights panel
   - study_analysis: extended SWOT-style study analysis for Cornell notes
   - concepts: short noun-phrase keywords pulled from the note
@@ -16,10 +16,12 @@ dropped) so the frontend can trust the payload.
 
 from __future__ import annotations
 
+import ast
 import json
+import re
 from copy import deepcopy
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
@@ -30,6 +32,7 @@ from app.schemas import (
     ExternalLink,
     StudyAnalysis,
     SuggestedLinkPair,
+    VideoLink,
 )
 
 _RESPONSE_SCHEMA: dict[str, Any] = {
@@ -72,10 +75,11 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "properties": {
+                    "favicon": {"type": "string"},
                     "title": {"type": "string"},
                     "url": {"type": "string"},
                 },
-                "required": ["title", "url"],
+                "required": ["favicon", "title", "url"],
             },
         },
         "videos": {
@@ -83,10 +87,12 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "properties": {
+                    "thumbnail": {"type": "string"},
                     "title": {"type": "string"},
+                    "channel": {"type": "string"},
                     "url": {"type": "string"},
                 },
-                "required": ["title", "url"],
+                "required": ["thumbnail", "title", "channel", "url"],
             },
         },
     },
@@ -120,8 +126,8 @@ def _build_prompt(body: AiAnalyzeRequest) -> str:
     pro_mode = bool(body.pro_mode)
     source_rules = [
         "- see_also: 2-4 reputable academic links (studies, articles, official references) relevant to the note content.",
-        "- videos: 1-3 YouTube video or podcast links for video/audio learners.",
-        "  Use stable, likely-valid http/https URLs only. If unsure, return fewer links rather than invented URLs.",
+        "- videos: 1-3 real, existing YouTube videos or podcasts for video/audio learners.",
+        "  Only include specific YouTube video URLs that you are confident exist; if unsure, return [].",
     ]
     if pro_mode:
         source_rules = [
@@ -130,8 +136,8 @@ def _build_prompt(body: AiAnalyzeRequest) -> str:
             "  government/medical/legal authorities, and major scholarly publishers.",
             "  Avoid casual blogs, low-authority summaries, and unsourced content.",
             "- see_also: 2-4 highly reputable academic links relevant to the note content.",
-            "- videos: 0-2 reputable YouTube lectures, university channels, conference talks, or academic podcasts only.",
-            "  Use stable, likely-valid http/https URLs only. If unsure, return fewer links rather than invented URLs.",
+            "- videos: 0-2 real, existing reputable YouTube lectures, university channels, conference talks, or academic podcasts only.",
+            "  Only include specific YouTube video URLs that you are confident exist; if unsure, return [].",
         ]
 
     return "\n".join(
@@ -148,8 +154,8 @@ def _build_prompt(body: AiAnalyzeRequest) -> str:
             "  },",
             '  "concepts": ["short noun phrase", ...],',
             '  "suggested_links": [{"a": <box id>, "a_content": "<box content>", "b": <box id>, "b_content": "<box content>"}, ...],',
-            '  "see_also": [{"title": "<link title>", "url": "<url>"}, ...],',
-            '  "videos": [{"title": "<video title>", "url": "<youtube url>"}, ...] }',
+            '  "see_also": [{"favicon": "<emoji or short source mark>", "title": "<link title>", "url": "<url>"}, ...],',
+            '  "videos": [{"thumbnail": "<thumbnail image url>", "title": "<video title>", "channel": "<video channel>", "url": "<youtube video url>"}, ...] }',
             "",
             "Rules:",
             "- overview: 3-5 concise, notable bullet points that summarize the total note content. Do not include markdown bullets or headings.",
@@ -163,7 +169,9 @@ def _build_prompt(body: AiAnalyzeRequest) -> str:
             "  Include the exact box content for a_content and b_content.",
             f"  Valid box ids: {valid_ids if valid_ids else '[]'}.",
             "  Do NOT invent ids. Do NOT include self-links (a == b).",
+            "  Prefer missing links that would improve understanding; do not simply repeat every existing link.",
             "  Return at most 8 pairs.",
+            "- videos: use fields thumbnail, title, channel, url. For YouTube, thumbnail should be a valid i.ytimg.com thumbnail when known.",
             *source_rules,
             "",
             "Heading:",
@@ -198,9 +206,9 @@ def _text_from_gemini_response(data: dict[str, Any]) -> str:
     return "\n".join(chunks).strip()
 
 
-def _gemini_generate(prompt: str, model_override: str = "") -> str:
+def _gemini_generate(prompt: str, model_override: str = "", api_key: str = "") -> str:
     model = (model_override or settings.gemini_model).strip()
-    key = settings.gemini_api_key.strip()
+    key = (api_key or settings.gemini_api_key).strip()
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     payload: dict[str, Any] = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -239,9 +247,9 @@ def _text_from_openai_response(data: dict[str, Any]) -> str:
     return "\n".join(chunks).strip()
 
 
-def _openai_generate(prompt: str, model_override: str = "") -> str:
+def _openai_generate(prompt: str, model_override: str = "", api_key: str = "") -> str:
     model = (model_override or settings.openai_model).strip() or "gpt-5-mini"
-    key = settings.openai_api_key.strip()
+    key = (api_key or settings.openai_api_key).strip()
     url = "https://api.openai.com/v1/responses"
     payload: dict[str, Any] = {
         "model": model,
@@ -271,8 +279,8 @@ def _openai_generate(prompt: str, model_override: str = "") -> str:
         return _text_from_openai_response(r.json())
 
 
-def _ollama_generate(prompt: str, model_override: str = "") -> str:
-    base = settings.ollama_base_url.rstrip("/")
+def _ollama_generate(prompt: str, model_override: str = "", base_url: str = "") -> str:
+    base = (base_url or settings.ollama_base_url).rstrip("/")
     url = f"{base}/api/generate"
     payload = {
         "model": (model_override or settings.ollama_model).strip() or "llama3",
@@ -364,6 +372,48 @@ def _sanitize_short_list(value: Any, limit: int = 3) -> list[str]:
     return out
 
 
+def _content_tokens(text: str) -> set[str]:
+    stopwords = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "that",
+        "this",
+        "from",
+        "are",
+        "was",
+        "were",
+        "has",
+        "have",
+        "not",
+        "box",
+        "new",
+    }
+    return {
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9'/-]{1,}", text)
+        if token.lower() not in stopwords
+    }
+
+
+def _is_placeholder_box(content: str) -> bool:
+    return not content.strip() or content.strip().lower() in {"seed", "new box", "new seed", "untitled"}
+
+
+def _opening_family(content: str) -> str:
+    text = content.lower()
+    if "e4" in text:
+        return "e4"
+    if "d4" in text:
+        return "d4"
+    if "c4" in text:
+        return "c4"
+    if "nf3" in text:
+        return "nf3"
+    return ""
+
+
 def _sanitize_study_analysis(value: Any) -> StudyAnalysis:
     if not isinstance(value, dict):
         return StudyAnalysis()
@@ -427,23 +477,68 @@ def _sanitize_see_also(value: Any) -> list[ExternalLink]:
         parsed = urlparse(clean_url)
         if not clean_title or parsed.scheme not in {"http", "https"} or not parsed.netloc:
             continue
-        out.append(ExternalLink(title=clean_title, url=clean_url))
+        favicon = item.get("favicon")
+        clean_favicon = favicon.strip() if isinstance(favicon, str) else ""
+        if not clean_favicon:
+            clean_favicon = parsed.netloc.removeprefix("www.")[:1].upper()
+        out.append(ExternalLink(favicon=clean_favicon, title=clean_title, url=clean_url))
         if len(out) >= 5:
             break
     return out
 
 
-def _sanitize_videos(value: Any) -> list[ExternalLink]:
-    links = _sanitize_see_also(value)
-    out: list[ExternalLink] = []
-    for link in links:
-        host = urlparse(link.url).netloc.lower()
+def _sanitize_videos(value: Any) -> list[VideoLink]:
+    if not isinstance(value, list):
+        return []
+    out: list[VideoLink] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        raw_title = item.get("title") or item.get("video title") or item.get("video_title")
+        raw_channel = item.get("channel") or item.get("video channel") or item.get("video_channel") or ""
+        raw_url = item.get("url")
+        if not isinstance(raw_title, str) or not isinstance(raw_url, str):
+            continue
+        title = raw_title.strip()
+        url = raw_url.strip()
+        parsed = urlparse(url)
+        host = parsed.netloc.lower()
+        if not title or parsed.scheme not in {"http", "https"}:
+            continue
         if "youtube.com" not in host and "youtu.be" not in host:
             continue
-        out.append(link)
+        video_id = _youtube_video_id(url)
+        if not video_id:
+            continue
+        thumbnail = item.get("thumbnail") or item.get("video thumbnail") or item.get("thumbnail_url") or ""
+        if not isinstance(thumbnail, str) or not thumbnail.strip():
+            thumbnail = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+        out.append(
+            VideoLink(
+                thumbnail=thumbnail.strip(),
+                title=title,
+                channel=raw_channel.strip() if isinstance(raw_channel, str) else "",
+                url=url,
+            )
+        )
         if len(out) >= 3:
             break
     return out
+
+
+def _youtube_video_id(url: str) -> str:
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    if "youtu.be" in host:
+        candidate = parsed.path.strip("/").split("/")[0]
+    else:
+        params = parse_qs(parsed.query)
+        candidate = (params.get("v") or [""])[0]
+        if not candidate and "/shorts/" in parsed.path:
+            candidate = parsed.path.split("/shorts/", 1)[1].split("/", 1)[0]
+        if not candidate and "/embed/" in parsed.path:
+            candidate = parsed.path.split("/embed/", 1)[1].split("/", 1)[0]
+    return candidate if re.fullmatch(r"[A-Za-z0-9_-]{11}", candidate or "") else ""
 
 
 def _structured_to_analysis_text(overview: list[str], study_analysis: StudyAnalysis) -> str:
@@ -485,7 +580,10 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
         try:
             data = json.loads(candidate)
         except json.JSONDecodeError:
-            continue
+            try:
+                data = ast.literal_eval(candidate)
+            except (SyntaxError, ValueError):
+                continue
         if isinstance(data, str):
             try:
                 data = json.loads(data)
@@ -497,18 +595,227 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
                 parsed_nested = _extract_json_object(nested)
                 if parsed_nested:
                     return parsed_nested
+            if "overview" not in data and isinstance(nested, dict):
+                return nested
             return data
     return None
 
 
-def _build_structured_output(text: str, box_contents: dict[int, str]) -> AiAnalyzeOut:
+def _clean_model_text_for_fallback(text: str) -> str:
+    cleaned = text.strip()
+    cleaned = cleaned.removeprefix("```json").removeprefix("```").removesuffix("```")
+    cleaned = re.sub(r'["{}\[\],:]+', " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def _note_text_for_fallback(body: AiAnalyzeRequest, box_contents: dict[int, str]) -> str:
+    parts = [
+        body.heading.strip(),
+        body.cueText.strip(),
+        body.summary.strip(),
+        *[content.strip() for _, content in sorted(box_contents.items())],
+    ]
+    return " ".join(part for part in parts if part)
+
+
+def _fallback_overview(body: AiAnalyzeRequest, box_contents: dict[int, str], model_text: str) -> list[str]:
+    note_text = _note_text_for_fallback(body, box_contents)
+    overview: list[str] = []
+    heading = body.heading.strip()
+    heading_words = _content_tokens(heading)
+    concepts = [
+        concept
+        for concept in _fallback_concepts(body, box_contents)
+        if concept.lower() != heading.lower()
+        and concept.lower() not in heading_words
+    ]
+    first_concepts = concepts[:4]
+    if heading:
+        if first_concepts:
+            overview.append(
+                f"{heading} is organized around {', '.join(first_concepts[:-1])}"
+                f"{' and ' if len(first_concepts) > 1 else ''}{first_concepts[-1] if first_concepts else ''}."
+            )
+        else:
+            overview.append(f"The note focuses on {heading}.")
+
+    box_items = [(box_id, content.strip()) for box_id, content in sorted(box_contents.items()) if content.strip()]
+    if len(box_items) >= 2:
+        overview.append(
+            "The note uses a visual map of seed cells to compare related ideas and possible study connections."
+        )
+
+    source = body.cueText.strip() or body.summary.strip() or note_text or _clean_model_text_for_fallback(model_text)
+    for sentence in re.split(r"(?<=[.!?])\s+|(?:\n\s*-\s+)|(?:\s+-\s+)", source):
+        sentence = sentence.strip(" -")
+        if not sentence or len(sentence) < 8:
+            continue
+        if sentence.lower() in {"new box", "seed"}:
+            continue
+        if sentence not in overview:
+            overview.append(sentence[:220])
+        if len(overview) >= 4:
+            break
+    if not overview:
+        overview.append("The note contains limited analyzable content and needs more detail before a full AI overview can be produced.")
+    return overview[:5]
+
+
+def _fallback_concepts(body: AiAnalyzeRequest, box_contents: dict[int, str]) -> list[str]:
+    candidates: list[str] = []
+    stopwords = {
+        "and", "are", "also", "too", "want", "with", "best", "test", "according",
+        "other", "more", "less", "used", "known", "leads", "leading", "minute",
+        "minutes", "opponents", "outsmart", "common", "response", "guarded",
+        "considered", "respectively", "often", "most", "many", "within",
+    }
+    for value in [body.heading, body.cueText, body.summary, *box_contents.values()]:
+        value = value.strip()
+        if not value:
+            continue
+        if len(value) <= 40:
+            candidates.append(value)
+        candidates.extend(re.findall(r"\b[A-Z][A-Za-z0-9'/-]*(?:\s+[A-Z][A-Za-z0-9'/-]*){0,2}\b", value))
+        candidates.extend(
+            token
+            for token in re.findall(r"\b[a-zA-Z][A-Za-z0-9'/-]{1,}\b", value)
+            if token.lower() not in stopwords and (len(token) > 2 or re.search(r"\d", token))
+        )
+    return _sanitize_concepts(candidates)[:20]
+
+
+def _fallback_study_analysis(body: AiAnalyzeRequest, box_contents: dict[int, str]) -> StudyAnalysis:
+    has_content = bool(_note_text_for_fallback(body, box_contents))
+    if not has_content:
+        return StudyAnalysis(
+            weaknesses=["The note has too little content for reliable analysis."],
+            recommended_improvements=["Add core facts, examples, and a brief summary before retrying AI analysis."],
+        )
+    populated_boxes = [content for content in box_contents.values() if not _is_placeholder_box(content)]
+    placeholder_count = len(box_contents) - len(populated_boxes)
+    linked_ids = {str(line) for b in body.boxes for line in b.lines}
+    strengths = [
+        "The note captures concrete terms and examples that can be reviewed as active recall prompts."
+    ]
+    if len(populated_boxes) >= 3:
+        strengths.append("The seed-cell layout supports comparison between related subtopics instead of a single linear outline.")
+    if body.summary.strip():
+        strengths.append("The summary section gives the note a concise review target after studying the details.")
+
+    weaknesses = []
+    if placeholder_count:
+        weaknesses.append("Some seed cells are empty or still generic, which weakens the map as a study aid.")
+    if not body.summary.strip():
+        weaknesses.append("The summary is missing, so the note lacks a final synthesis checkpoint.")
+    if len(populated_boxes) and len(linked_ids) < max(1, len(populated_boxes) // 2):
+        weaknesses.append("Several ideas appear under-linked, making relationships harder to revise later.")
+    if not weaknesses:
+        weaknesses.append("Some explanations are still terse and would benefit from definitions, examples, and reasons.")
+
+    opportunities = [
+        "Add named examples, causes, consequences, or standard cases to turn each seed into a stronger revision unit.",
+        "Use suggested links to connect ideas that share a principle, contrast, or sequence.",
+    ]
+    threats = [
+        "Memorising isolated keywords without explanations can create shallow recall under exam or practice pressure.",
+        "Unverified claims or missing examples may make the note feel complete while leaving important gaps."
+    ]
+    improvements = [
+        "Replace generic or empty seed cells with precise terms, definitions, or worked examples.",
+        "Add missing links between related boxes and write one sentence explaining why each link matters.",
+        "Expand the summary into a compact answer that could be used for self-testing."
+    ]
+    return StudyAnalysis(
+        strengths=strengths[:3],
+        weaknesses=weaknesses[:3],
+        opportunities=opportunities[:3],
+        threats=threats[:3],
+        recommended_improvements=improvements[:3],
+    )
+
+
+def _fallback_suggested_links(box_contents: dict[int, str], body: AiAnalyzeRequest) -> list[SuggestedLinkPair]:
+    existing: set[tuple[int, int]] = set()
+    for box in body.boxes:
+        for raw_link in box.lines:
+            try:
+                other = int(raw_link)
+            except (TypeError, ValueError):
+                continue
+            pair = (box.id, other) if box.id < other else (other, box.id)
+            existing.add(pair)
+
+    candidates: list[tuple[int, int, int]] = []
+    usable = [(box_id, content) for box_id, content in sorted(box_contents.items()) if not _is_placeholder_box(content)]
+    for index, (a, a_content) in enumerate(usable):
+        a_tokens = _content_tokens(a_content)
+        a_family = _opening_family(a_content)
+        for b, b_content in usable[index + 1 :]:
+            pair = (a, b) if a < b else (b, a)
+            if pair in existing:
+                continue
+            b_tokens = _content_tokens(b_content)
+            score = len(a_tokens & b_tokens)
+            if a_family and a_family == _opening_family(b_content):
+                score += 3
+            if score <= 0 and len(usable) <= 6:
+                score = 1
+            if score > 0:
+                candidates.append((score, pair[0], pair[1]))
+    candidates.sort(key=lambda item: (-item[0], item[1], item[2]))
+    return [
+        SuggestedLinkPair(a=a, a_content=box_contents.get(a, ""), b=b, b_content=box_contents.get(b, ""))
+        for _, a, b in candidates[:8]
+    ]
+
+
+def _fallback_see_also(body: AiAnalyzeRequest, concepts: list[str]) -> list[ExternalLink]:
+    text = _note_text_for_fallback(body, {b.id: b.content for b in body.boxes}).lower()
+    if "chess" in text or "opening" in text or {"e4", "d4", "c4", "nf3"} & {c.lower() for c in concepts}:
+        return [
+            ExternalLink(favicon="♟️", title="Wikipedia: Chess opening", url="https://en.wikipedia.org/wiki/Chess_opening"),
+            ExternalLink(favicon="L", title="Lichess: Openings", url="https://lichess.org/opening"),
+            ExternalLink(favicon="C", title="Chess.com: Chess Openings", url="https://www.chess.com/openings"),
+        ]
+    if concepts:
+        query = "+".join(re.sub(r"[^A-Za-z0-9 ]+", "", concept).strip().replace(" ", "+") for concept in concepts[:3])
+        if query:
+            return [
+                ExternalLink(favicon="W", title=f"Wikipedia search: {concepts[0]}", url=f"https://en.wikipedia.org/w/index.php?search={query}"),
+            ]
+    return []
+
+
+def _fallback_structured_output(
+    text: str, body: AiAnalyzeRequest, box_contents: dict[int, str]
+) -> AiAnalyzeOut:
+    overview = _fallback_overview(body, box_contents, text)
+    study_analysis = _fallback_study_analysis(body, box_contents)
+    concepts = _fallback_concepts(body, box_contents)
+    suggested_links = _fallback_suggested_links(box_contents, body)
+    see_also = _fallback_see_also(body, concepts)
+    return AiAnalyzeOut(
+        status="ok",
+        message="TreeNotes generated a structured analysis from the note content because the model returned unparseable JSON.",
+        overview=overview,
+        study_analysis=study_analysis,
+        analysis=_structured_to_analysis_text(overview, study_analysis),
+        concepts=concepts,
+        suggested_links=suggested_links,
+        see_also=see_also,
+        videos=[],
+    )
+
+
+def _build_structured_output(
+    text: str, body: AiAnalyzeRequest, box_contents: dict[int, str]
+) -> AiAnalyzeOut:
     if not text or not text.strip():
-        return AiAnalyzeOut(status="error", message="Model returned empty text.", analysis="")
+        return _fallback_structured_output("", body, box_contents)
     data = _extract_json_object(text)
     if data is None:
-        # Older models / non-JSON-mode fallback: keep raw text as the analysis blob
-        # so the UI still has something to show, but leave structured fields empty.
-        return AiAnalyzeOut(status="ok", analysis=text.strip())
+        return _fallback_structured_output(text, body, box_contents)
     overview = _sanitize_overview(data.get("overview"))
     study_analysis = _sanitize_study_analysis(data.get("study_analysis"))
     analysis = _structured_to_analysis_text(overview, study_analysis) or str(data.get("analysis") or "").strip()
@@ -528,12 +835,13 @@ def _build_structured_output(text: str, box_contents: dict[int, str]) -> AiAnaly
     )
 
 
-def _effective_provider(requested_provider: str | None = None) -> str:
+def _effective_provider(body: AiAnalyzeRequest) -> str:
+    requested_provider = body.llm_provider
     p = (requested_provider or settings.ai_provider or "auto").strip().lower()
     if p == "auto":
-        if settings.gemini_api_key.strip():
+        if (body.gemini_api_key or settings.gemini_api_key).strip():
             return "gemini"
-        if settings.openai_api_key.strip():
+        if (body.openai_api_key or settings.openai_api_key).strip():
             return "openai"
         return "placeholder"
     if p in ("gemini", "openai", "ollama", "placeholder"):
@@ -559,43 +867,46 @@ def _requested_model(body: AiAnalyzeRequest, provider: str) -> str:
 
 
 def run_ai_analyze(body: AiAnalyzeRequest) -> AiAnalyzeOut:
-    prov = _effective_provider(body.llm_provider)
+    prov = _effective_provider(body)
     model_override = _requested_model(body, prov)
+    gemini_key = (body.gemini_api_key or settings.gemini_api_key).strip()
+    openai_key = (body.openai_api_key or settings.openai_api_key).strip()
+    ollama_base_url = (body.ollama_base_url or settings.ollama_base_url).strip()
     box_contents = {b.id: b.content for b in body.boxes}
     if prov == "placeholder":
         return AiAnalyzeOut(
             status="placeholder",
-            message="AI is not enabled. Set GEMINI_API_KEY, OPENAI_API_KEY, or AI_PROVIDER=ollama on the server.",
+            message="AI is not enabled. Add a Gemini/OpenAI API key in AI Settings, set one on the server, or use AI_PROVIDER=ollama.",
             analysis="",
         )
     if prov == "gemini":
-        if not settings.gemini_api_key.strip():
+        if not gemini_key:
             return AiAnalyzeOut(
                 status="error",
-                message="AI_PROVIDER=gemini but GEMINI_API_KEY is empty.",
+                message="Gemini selected but no Gemini API key is available.",
                 analysis="",
             )
         try:
-            text = _gemini_generate(_build_prompt(body), model_override)
+            text = _gemini_generate(_build_prompt(body), model_override, gemini_key)
         except Exception as e:
             return AiAnalyzeOut(status="error", message=str(e)[:800], analysis="")
-        return _build_structured_output(text, box_contents)
+        return _build_structured_output(text, body, box_contents)
     if prov == "openai":
-        if not settings.openai_api_key.strip():
+        if not openai_key:
             return AiAnalyzeOut(
                 status="error",
-                message="AI_PROVIDER=openai but OPENAI_API_KEY is empty.",
+                message="OpenAI selected but no OpenAI API key is available.",
                 analysis="",
             )
         try:
-            text = _openai_generate(_build_prompt(body), model_override)
+            text = _openai_generate(_build_prompt(body), model_override, openai_key)
         except Exception as e:
             return AiAnalyzeOut(status="error", message=str(e)[:800], analysis="")
-        return _build_structured_output(text, box_contents)
+        return _build_structured_output(text, body, box_contents)
     if prov == "ollama":
         try:
-            text = _ollama_generate(_build_prompt(body), model_override)
+            text = _ollama_generate(_build_prompt(body), model_override, ollama_base_url)
         except Exception as e:
             return AiAnalyzeOut(status="error", message=str(e)[:800], analysis="")
-        return _build_structured_output(text, box_contents)
+        return _build_structured_output(text, body, box_contents)
     return AiAnalyzeOut(status="placeholder", message="Unknown AI_PROVIDER.", analysis="")

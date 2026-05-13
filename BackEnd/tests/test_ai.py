@@ -107,7 +107,7 @@ def test_ai_analyze_gemini_forced_without_key_returns_error(
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == "error"
-    assert "GEMINI_API_KEY" in data["message"]
+    assert "Gemini API key" in data["message"]
 
 
 def test_ai_analyze_gemini_returns_structured_payload(
@@ -138,7 +138,7 @@ def test_ai_analyze_gemini_returns_structured_payload(
                 {"a": "x", "b": "y"},  # not ints, drop
             ],
             "see_also": [
-                {"title": "Khan Academy: Mitosis", "url": "https://www.khanacademy.org/science/biology/cellular-molecular-biology/mitosis/a/phases-of-mitosis"},
+                {"favicon": "K", "title": "Khan Academy: Mitosis", "url": "https://www.khanacademy.org/science/biology/cellular-molecular-biology/mitosis/a/phases-of-mitosis"},
                 {"title": "", "url": "https://example.com/empty-title"},
                 {"title": "Bad URL", "url": "notaurl"},
             ],
@@ -179,18 +179,68 @@ def test_ai_analyze_gemini_returns_structured_payload(
     ]
     assert data["see_also"] == [
         {
+            "favicon": "K",
             "title": "Khan Academy: Mitosis",
             "url": "https://www.khanacademy.org/science/biology/cellular-molecular-biology/mitosis/a/phases-of-mitosis",
         }
     ]
     assert data["videos"] == [
-        {"title": "Mitosis video", "url": "https://www.youtube.com/watch?v=f-ldPgEfAHI"}
+        {
+            "thumbnail": "https://i.ytimg.com/vi/f-ldPgEfAHI/hqdefault.jpg",
+            "title": "Mitosis video",
+            "channel": "",
+            "url": "https://www.youtube.com/watch?v=f-ldPgEfAHI",
+        }
     ]
 
     gen = (captured["json"] or {}).get("generationConfig", {})
     assert gen.get("responseMimeType") == "application/json"
     assert "responseSchema" in gen
     assert "tools" not in (captured["json"] or {})
+
+
+def test_ai_analyze_uses_request_scoped_gemini_key(
+    client: TestClient, monkeypatch
+) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "placeholder")
+    monkeypatch.setattr(settings, "gemini_api_key", "")
+
+    model_json = json.dumps(
+        {
+            "overview": ["Request key works"],
+            "study_analysis": {
+                "strengths": [],
+                "weaknesses": [],
+                "opportunities": [],
+                "threats": [],
+                "recommended_improvements": [],
+            },
+            "concepts": [],
+            "suggested_links": [],
+            "see_also": [],
+            "videos": [],
+        }
+    )
+    captured = _patch_gemini_response(monkeypatch, model_json)
+
+    r = client.post(
+        "/ai/analyze",
+        json={
+            "heading": "H",
+            "cueText": "",
+            "summary": "",
+            "boxes": [],
+            "llm_provider": "gemini",
+            "gemini_api_key": "request-key",
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "ok"
+    assert data["overview"] == ["Request key works"]
+    assert captured["params"] == {"key": "request-key"}
 
 
 def test_ai_analyze_gemini_malformed_json_falls_back_to_text(
@@ -205,14 +255,43 @@ def test_ai_analyze_gemini_malformed_json_falls_back_to_text(
 
     r = client.post(
         "/ai/analyze",
+        json={
+            "heading": "Chess",
+            "cueText": "Openings",
+            "summary": "Study e4 and d4 plans.",
+            "boxes": [{"id": 1, "content": "e4 controls the centre", "lines": []}],
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "ok"
+    assert data["overview"]
+    assert data["study_analysis"]["recommended_improvements"]
+    assert "not really JSON" not in data["analysis"]
+    assert data["concepts"]
+    assert data["suggested_links"] == []
+
+
+def test_ai_analyze_malformed_json_like_text_does_not_return_raw_json(
+    client: TestClient, monkeypatch
+) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "gemini")
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+
+    _patch_gemini_response(monkeypatch, '{"overview": ["unterminated"')
+
+    r = client.post(
+        "/ai/analyze",
         json={"heading": "X", "cueText": "", "summary": "", "boxes": []},
     )
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == "ok"
-    assert "markdown bullets" in data["analysis"]
-    assert data["concepts"] == []
-    assert data["suggested_links"] == []
+    assert data["overview"]
+    assert data["study_analysis"]["recommended_improvements"]
+    assert not data["analysis"].lstrip().startswith("{")
 
 
 def test_ai_analyze_extracts_json_from_fenced_model_text(

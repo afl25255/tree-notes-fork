@@ -9,6 +9,7 @@ class BoxStyle(BaseModel):
     left: str = "0px"
     top: str = "20px"
     backgroundColor: Optional[str] = None
+    color: Optional[str] = None
 
     @field_validator("left", "top", mode="before")
     @classmethod
@@ -46,11 +47,17 @@ class BoxInOut(BaseModel):
         return []
 
 
+class HeadingStyle(BaseModel):
+    backgroundColor: Optional[str] = None
+    color: Optional[str] = None
+
+
 class NoteDocument(BaseModel):
     """Full note payload aligned with frontend JSON export."""
 
     id: Optional[UUID] = None
     heading: str = ""
+    headingStyle: Optional[HeadingStyle] = None
     cueText: str = ""
     summary: str = ""
     boxes: list[BoxInOut] = Field(default_factory=list)
@@ -64,6 +71,7 @@ class NoteSummary(BaseModel):
 
 class NoteCreate(BaseModel):
     heading: str = ""
+    headingStyle: Optional[HeadingStyle] = None
     cueText: str = ""
     summary: str = ""
     boxes: list[BoxInOut] = Field(default_factory=list)
@@ -73,6 +81,7 @@ class NoteUpdate(BaseModel):
     """Full replace of note content (same shape as export)."""
 
     heading: str = ""
+    headingStyle: Optional[HeadingStyle] = None
     cueText: str = ""
     summary: str = ""
     boxes: list[BoxInOut] = Field(default_factory=list)
@@ -96,6 +105,9 @@ class AiAnalyzeRequest(NoteUpdate):
     llm_provider: Optional[str] = None
     llm_model: Optional[str] = None
     pro_mode: bool = False
+    gemini_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    ollama_base_url: Optional[str] = None
 
 
 class SuggestedLinkPair(BaseModel):
@@ -105,8 +117,17 @@ class SuggestedLinkPair(BaseModel):
     b_content: str = ""
 
 class ExternalLink(BaseModel):
+    favicon: str = ""
     title: str
     url: str
+
+
+class VideoLink(BaseModel):
+    thumbnail: str = ""
+    title: str
+    channel: str = ""
+    url: str
+
 
 class StudyAnalysis(BaseModel):
     strengths: list[str] = Field(default_factory=list)
@@ -124,4 +145,4 @@ class AiAnalyzeOut(BaseModel):
     concepts: list[str] = Field(default_factory=list)
     suggested_links: list[SuggestedLinkPair] = Field(default_factory=list)
     see_also: list[ExternalLink] = Field(default_factory=list)
-    videos: list[ExternalLink] = Field(default_factory=list)
+    videos: list[VideoLink] = Field(default_factory=list)
