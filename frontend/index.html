@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- script.js getApiBase() reads this; "/api" matches nginx proxying and any reverse proxy exposing /api/*. -->
     <meta name="treenotes-api-base" content="/api">
-    <link rel="stylesheet" href="style.css">
-    <script src="script.js" defer></script>
-    <title>Tree Notes</title>
+    <link rel="stylesheet" href="style.css?v=20260518-ui-polish-1">
+    <link rel="stylesheet" href="ui-language-extra.css?v=20260518-ui-polish-1">
+    <script src="script.js?v=20260518-ui-polish-1" defer></script>
+    <title>Tree Notes (Open Beta)</title>
 </head>
 <body>
 
@@ -94,11 +95,22 @@
                     <option value="en-AU">English (Australia)</option>
                     <option value="en-US">English (US)</option>
                     <option value="en-GB">English (UK)</option>
-                    <option value="es-ES">Spanish</option>
-                    <option value="fr-FR">French</option>
-                    <option value="zh-CN">Chinese (Mandarin)</option>
-                    <option value="ar-SA">Arabic</option>
-                    <option value="hi-IN">Hindi</option>
+                    <option value="fr-FR">Français</option>
+                    <option value="de-DE">Deutsch</option>
+                    <option value="es-ES">Español</option>
+                    <option value="it-IT">Italiano</option>
+                    <option value="pt-PT">Português</option>
+                    <option value="ru-RU">Русский</option>
+                    <option value="el-GR">Ελληνικά</option>
+                    <option value="vi-VN">Tiếng Việt</option>
+                    <option value="zh-CN">中文（普通话）</option>
+                    <option value="ja-JP">日本語</option>
+                    <option value="ko-KR">한국어</option>
+                    <option value="id-ID">Bahasa Indonesia</option>
+                    <option value="ar-SA">العربية</option>
+                    <option value="fa-IR">فارسی</option>
+                    <option value="he-IL">עברית</option>
+                    <option value="yi">ייִדיש</option>
                 </select>
                 <label class="menu-toggle">
                     <input type="checkbox" id="dictation-continuous" checked>
@@ -119,13 +131,24 @@
                 <label class="menu-label" for="ui-language">UI Language</label>
                 <select class="menu-input" id="ui-language">
                     <option value="en">English</option>
-                    <option value="es" disabled>Spanish (coming soon)</option>
-                    <option value="fr" disabled>French (coming soon)</option>
-                    <option value="zh" disabled>Chinese (coming soon)</option>
-                    <option value="ar" disabled>Arabic (coming soon)</option>
-                    <option value="hi" disabled>Hindi (coming soon)</option>
+                    <option value="fr">Français</option>
+                    <option value="de">Deutsch</option>
+                    <option value="es">Español</option>
+                    <option value="it">Italiano</option>
+                    <option value="pt">Português</option>
+                    <option value="ru">Русский</option>
+                    <option value="el">Ελληνικά</option>
+                    <option value="vi">Tiếng Việt</option>
+                    <option value="zh">中文（普通话）</option>
+                    <option value="ja">日本語</option>
+                    <option value="ko">한국어</option>
+                    <option value="id">Bahasa Indonesia</option>
+                    <option value="ar">العربية</option>
+                    <option value="fa">فارسی</option>
+                    <option value="he">עברית</option>
+                    <option value="yi">ייִדיש</option>
                 </select>
-                <p class="menu-hint">English is active. More interface languages can be added later.</p>
+                <p class="menu-hint">Changes interface labels only; AI can already handle multilingual notes.</p>
             </section>
 
             <hr class="menu-divider" />
@@ -149,20 +172,29 @@
 
     <div id="title-bar">
         <h1>Tree Notes</h1>
-        <button id="fullscreen-btn">⛶</button>
+        <div class="title-bar-actions">
+            <button type="button" id="connectionStatusBtn" class="connection-status-btn is-checking" aria-label="Checking connection" title="Checking connection">
+                <span class="connection-status-dot" aria-hidden="true"></span>
+                <span class="connection-status-label">Checking</span>
+            </button>
+            <button id="fullscreen-btn" type="button">⛶</button>
+        </div>
     </div>
     <main id="cornellLayout">
         <div id="heading" class="cornell-heading">
             <div id="headingText" contenteditable="true" data-placeholder="Cornell Note Heading"></div>
             <div class="heading-color-controls" contenteditable="false" aria-label="Heading color controls">
-                <label class="heading-color-button" title="Change Heading Color">
-                    <span>Heading</span>
-                    <input id="headingColor" type="color" value="#22c55e" aria-label="Change Heading Color">
-                </label>
-                <label class="heading-color-button" title="Change Heading Text Color">
-                    <span>Text</span>
-                    <input id="headingTextColor" type="color" value="#ffffff" aria-label="Change Heading Text Color">
-                </label>
+                <button type="button" id="headingColorMenuToggle" class="heading-color-menu-toggle" aria-label="Heading color settings" aria-haspopup="true" aria-expanded="false" title="Heading color settings">⌄</button>
+                <div id="headingColorMenu" class="heading-color-menu" role="menu" aria-label="Heading color settings">
+                    <label class="heading-color-button" title="Change Heading Background Color">
+                        <span>Background</span>
+                        <input id="headingColor" type="color" value="#22c55e" aria-label="Change Heading Background Color">
+                    </label>
+                    <label class="heading-color-button" title="Change Heading Text Color">
+                        <span>Text</span>
+                        <input id="headingTextColor" type="color" value="#ffffff" aria-label="Change Heading Text Color">
+                    </label>
+                </div>
             </div>
         </div>
 

@@ -427,3 +427,92 @@ def test_ai_analyze_openai_uses_structured_outputs_and_request_model(
     assert payload["text"]["format"]["type"] == "json_schema"
     assert payload["text"]["format"]["strict"] is True
     assert "OPENAI_API_KEY" not in json.dumps(payload)
+
+
+def test_ai_coach_placeholder_returns_local_puzzles(client: TestClient) -> None:
+    r = client.post(
+        "/ai/coach",
+        json={
+            "heading": "Chess Openings",
+            "cueText": "e4 and d4 are common first moves",
+            "summary": "e4 supports open tactical games; d4 often supports queen's pawn structures.",
+            "boxes": [
+                {"id": 1, "content": "e4", "lines": []},
+                {"id": 2, "content": "d4", "lines": []},
+                {"id": 3, "content": "c4", "lines": []},
+            ],
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "placeholder"
+    assert data["puzzles"]
+    assert {p["type"] for p in data["puzzles"]} & {"multiple_choice", "short_answer"}
+
+
+def test_ai_coach_gemini_returns_sanitized_puzzles(client: TestClient, monkeypatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "gemini")
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+
+    model_json = json.dumps(
+        {
+            "puzzles": [
+                {
+                    "id": "q1",
+                    "type": "multiple_choice",
+                    "prompt": "Which move is described as central?",
+                    "choices": [
+                        {"id": "A", "text": "e4"},
+                        {"id": "B", "text": "h4"},
+                        {"id": "C", "text": "a4"},
+                    ],
+                    "answer": "A",
+                    "acceptable_answers": [],
+                    "explanation": "e4 is the central move in the note. If missed, compare the options and try again.",
+                    "source_box_ids": [1, 999],
+                },
+                {
+                    "id": "bad",
+                    "type": "multiple_choice",
+                    "prompt": "Invalid answer should drop",
+                    "choices": [{"id": "A", "text": "x"}],
+                    "answer": "Z",
+                    "acceptable_answers": [],
+                    "explanation": "bad",
+                    "source_box_ids": [],
+                },
+            ]
+        }
+    )
+    _patch_gemini_response(monkeypatch, model_json)
+
+    r = client.post(
+        "/ai/coach",
+        json={
+            "heading": "Chess",
+            "cueText": "",
+            "summary": "",
+            "boxes": [{"id": 1, "content": "e4", "lines": []}],
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "ok"
+    assert data["puzzles"] == [
+        {
+            "id": "q1",
+            "type": "multiple_choice",
+            "prompt": "Which move is described as central?",
+            "choices": [
+                {"id": "A", "text": "e4"},
+                {"id": "B", "text": "h4"},
+                {"id": "C", "text": "a4"},
+            ],
+            "answer": "A",
+            "acceptable_answers": [],
+            "explanation": "e4 is the central move in the note. If missed, compare the options and try again.",
+            "source_box_ids": [1],
+        }
+    ]

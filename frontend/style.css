@@ -64,18 +64,28 @@ body {
 #title-bar h1 {
     margin: 0;
     font-size: 1.2rem;
+    max-width: calc(100% - 220px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-#fullscreen-btn {
-    background: transparent;
-    border: none;
-    font-size: 1.4rem;
-    line-height: 1;
-    cursor: pointer;
+.title-bar-actions {
     position: absolute;
     right: 16px;
     top: 50%;
     transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#fullscreen-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
     padding: 6px 8px;
     border-radius: 8px;
     color: var(--text-secondary);
@@ -85,6 +95,60 @@ body {
 #fullscreen-btn:hover {
     color: var(--accent-blue-end);
     background: var(--surface-muted);
+}
+
+.connection-status-btn {
+    --connection-status-color: #f59e0b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 44px;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--surface-strong);
+    border-radius: 999px;
+    background: var(--surface-muted);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.connection-status-btn:hover {
+    background: var(--surface);
+    border-color: var(--connection-status-color);
+    transform: translateY(-1px);
+}
+
+.connection-status-dot {
+    width: 10px;
+    height: 10px;
+    flex: 0 0 10px;
+    border-radius: 999px;
+    background: var(--connection-status-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--connection-status-color) 20%, transparent);
+}
+
+.connection-status-btn.is-online {
+    --connection-status-color: #16a34a;
+}
+
+.connection-status-btn.is-limited,
+.connection-status-btn.is-checking {
+    --connection-status-color: #facc15;
+}
+
+.connection-status-btn.is-offline {
+    --connection-status-color: #ef4444;
+}
+
+[data-theme="dark"] .connection-status-btn {
+    background: var(--surface-strong);
+    border-color: rgba(148, 163, 184, 0.32);
+    color: var(--text-primary);
 }
 
 #appMenu {
@@ -223,6 +287,11 @@ body {
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.menu-input option {
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
 .menu-input:focus {
     outline: none;
     border-color: var(--accent-blue-end);
@@ -270,6 +339,12 @@ body {
 [data-theme="dark"] .menu-input {
     background: var(--surface-muted);
     border-color: rgba(148, 163, 184, 0.3);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .menu-input option {
+    background: var(--surface);
+    color: var(--text-primary);
 }
 
 #cornellLayout {
@@ -336,23 +411,66 @@ body {
     right: 18px;
     top: 50%;
     transform: translateY(-50%);
-    display: flex;
-    gap: 8px;
+    z-index: 30;
+}
+
+.heading-color-menu-toggle {
+    display: inline-flex;
     align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.heading-color-menu-toggle:hover,
+.heading-color-controls.is-open .heading-color-menu-toggle {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+.heading-color-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 180px;
+    padding: 8px;
+    border: 1px solid var(--surface-strong);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text-primary);
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.22);
+    flex-direction: column;
+    gap: 6px;
+}
+
+.heading-color-controls.is-open .heading-color-menu {
+    display: flex;
 }
 
 .heading-color-button {
     display: inline-flex;
     align-items: center;
+    justify-content: space-between;
     gap: 6px;
-    padding: 6px 8px;
+    padding: 7px 8px 7px 10px;
     border-radius: 9px;
-    background: rgba(255, 255, 255, 0.18);
-    color: #ffffff;
-    font-size: 0.75rem;
+    background: var(--surface-muted);
+    color: var(--text-primary);
+    font-size: 0.8rem;
     font-weight: 700;
     cursor: pointer;
-    backdrop-filter: blur(4px);
+    white-space: nowrap;
 }
 
 .heading-color-button input[type="color"] {
@@ -363,6 +481,17 @@ body {
     border-radius: 8px;
     background: transparent;
     cursor: pointer;
+}
+
+[data-theme="dark"] .heading-color-menu {
+    background: var(--surface-strong);
+    border-color: rgba(148, 163, 184, 0.34);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .heading-color-button {
+    background: var(--surface-muted);
+    color: var(--text-primary);
 }
 
 .cornell-body {
@@ -716,6 +845,64 @@ body.has-insights {
 
 .coach-question {
     margin-bottom: 14px;
+}
+
+.coach-question__prompt {
+    font-weight: 700;
+}
+
+.coach-choice-list {
+    display: grid;
+    gap: 6px;
+}
+
+.coach-choice,
+.coach-short-answer button {
+    border: 1px solid var(--surface-strong);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text-primary);
+    padding: 8px 10px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.coach-choice.is-correct {
+    border-color: #16a34a;
+    background: rgba(34, 197, 94, 0.14);
+}
+
+.coach-choice.is-incorrect {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.coach-short-answer {
+    display: flex;
+    gap: 8px;
+}
+
+.coach-short-answer input {
+    flex: 1;
+    border: 1px solid var(--surface-strong);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+.coach-question__feedback {
+    margin: 8px 0 0;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}
+
+.coach-question__feedback.is-correct {
+    color: #15803d;
+}
+
+.coach-question__feedback.is-incorrect {
+    color: #b91c1c;
 }
 
 .coach-question details {
@@ -1076,6 +1263,7 @@ body.has-insights {
     padding: 8px 12px;
     text-align: left;
     background: #f3f3f3;
+    color: #1f2937;
     cursor: pointer;
     font-size: 0.95rem;
     transition: background 0.18s ease, transform 0.18s ease;
@@ -1313,6 +1501,26 @@ body.has-insights {
 }
 
 @media (max-width: 720px) {
+    #title-bar h1 {
+        max-width: calc(100% - 140px);
+    }
+
+    .connection-status-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .connection-status-btn {
+        width: 34px;
+        padding: 0;
+    }
+
     .notes-toolbar {
         justify-content: flex-start;
     }
@@ -1370,6 +1578,7 @@ body.has-insights {
     padding: 0;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
     max-width: min(420px, 94vw);
+    color: var(--text-primary);
 }
 
 .api-open-dialog::backdrop {
@@ -1379,12 +1588,13 @@ body.has-insights {
 .api-open-dialog__inner {
     padding: 16px;
     background: var(--surface);
-    color: inherit;
+    color: var(--text-primary);
 }
 
 .api-open-dialog__header {
     font-weight: 600;
     margin-bottom: 10px;
+    color: var(--text-primary);
 }
 
 .api-open-dialog__error {
@@ -1409,7 +1619,7 @@ body.has-insights {
 
 .api-open-list__empty {
     padding: 12px 8px;
-    color: var(--muted, #64748b);
+    color: var(--text-secondary);
     font-style: italic;
     border: none;
 }
@@ -1439,6 +1649,30 @@ body.has-insights {
 .api-open-dialog__actions button {
     padding: 8px 14px;
     cursor: pointer;
+    border: 1px solid var(--surface-strong);
+    border-radius: 8px;
+    background: var(--surface-muted);
+    color: var(--text-primary);
+    font: inherit;
+}
+
+.api-open-dialog__actions button:hover {
+    background: var(--surface-strong);
+}
+
+[data-theme="dark"] .api-open-dialog__inner {
+    background: var(--surface);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .api-open-dialog__actions button {
+    background: var(--surface-strong);
+    border-color: rgba(148, 163, 184, 0.35);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .api-open-dialog__actions button:hover {
+    background: rgba(148, 163, 184, 0.18);
 }
 
 :fullscreen #title-bar {

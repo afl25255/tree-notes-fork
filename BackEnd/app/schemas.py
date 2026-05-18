@@ -146,3 +146,25 @@ class AiAnalyzeOut(BaseModel):
     suggested_links: list[SuggestedLinkPair] = Field(default_factory=list)
     see_also: list[ExternalLink] = Field(default_factory=list)
     videos: list[VideoLink] = Field(default_factory=list)
+
+
+class CoachChoice(BaseModel):
+    id: str
+    text: str
+
+
+class CoachPuzzle(BaseModel):
+    id: str
+    type: Literal["multiple_choice", "short_answer"]
+    prompt: str
+    choices: list[CoachChoice] = Field(default_factory=list)
+    answer: str = ""
+    acceptable_answers: list[str] = Field(default_factory=list)
+    explanation: str = ""
+    source_box_ids: list[int] = Field(default_factory=list)
+
+
+class AiCoachOut(BaseModel):
+    status: Literal["ok", "placeholder", "error"] = "placeholder"
+    message: str = ""
+    puzzles: list[CoachPuzzle] = Field(default_factory=list)

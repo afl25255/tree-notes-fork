@@ -1,0 +1,130 @@
+html[dir="rtl"] body {
+    text-align: right;
+}
+
+html[dir="rtl"] #appMenu {
+    left: auto;
+    right: 10px;
+}
+
+html[dir="rtl"] #menuPopup {
+    left: auto;
+    right: 0;
+    text-align: right;
+}
+
+html[dir="rtl"] .title-bar-actions {
+    left: 16px;
+    right: auto;
+}
+
+html[dir="rtl"] .heading-color-controls {
+    left: 18px;
+    right: auto;
+}
+
+html[dir="rtl"] .heading-color-menu {
+    left: 0;
+    right: auto;
+}
+
+html[dir="rtl"] .menu-action-btn,
+html[dir="rtl"] .menu-toggle,
+html[dir="rtl"] .analysis-panel__header,
+html[dir="rtl"] .heading-color-button,
+html[dir="rtl"] .toolbar-color-button,
+html[dir="rtl"] .suggested-link-item,
+html[dir="rtl"] .video-link-item__anchor {
+    text-align: right;
+}
+
+html[dir="rtl"] .menu-input,
+html[dir="rtl"] .menu-hint,
+html[dir="rtl"] .menu-label,
+html[dir="rtl"] .menu-details-summary,
+html[dir="rtl"] .analysis-panel__content,
+html[dir="rtl"] .api-open-list button,
+html[dir="rtl"] .tree-menu__item,
+html[dir="rtl"] .dropdown-content {
+    text-align: right;
+}
+
+html[dir="rtl"] #headingText,
+html[dir="rtl"] #cueText,
+html[dir="rtl"] #notesText,
+html[dir="rtl"] .box {
+    direction: rtl;
+    text-align: right;
+}
+
+html[dir="rtl"] #headingText {
+    text-align: center;
+}
+
+html[dir="rtl"] .analysis-panel__content ul,
+html[dir="rtl"] .coach-question-list,
+html[dir="rtl"] .swot-group ul {
+    padding-left: 0;
+    padding-right: 20px;
+}
+
+html[dir="rtl"] .coach-choice,
+html[dir="rtl"] .coach-short-answer button {
+    text-align: right;
+}
+
+html[dir="rtl"] #tree .container,
+html[dir="rtl"] #zoom,
+html[dir="rtl"] #boxes,
+html[dir="rtl"] #lines {
+    direction: ltr;
+}
+
+html[dir="rtl"] #statusMessage,
+html[dir="rtl"] .tree-menu {
+    direction: rtl;
+    text-align: right;
+}
+
+html[dir="rtl"] body.has-insights {
+    padding-left: calc(var(--analysis-panel-width) + 24px);
+    padding-right: 16px;
+}
+
+html[dir="rtl"] .analysis-panel {
+    left: 16px;
+    right: auto;
+    transform: translateX(calc(-100% - 24px));
+}
+
+html[dir="rtl"] .analysis-panel.is-open {
+    transform: translateX(0);
+}
+
+html[dir="rtl"] .analysis-panel.is-collapsed .analysis-panel__chevron {
+    transform: rotate(90deg);
+}
+
+html[dir="rtl"] .dropdown-content {
+    left: auto;
+    right: 0;
+}
+
+html[dir="rtl"] .tree-menu__item:hover {
+    transform: translateX(-2px);
+}
+
+html[dir="rtl"] .api-open-dialog__actions {
+    justify-content: flex-start;
+}
+
+@media (max-width: 720px) {
+    html[dir="rtl"] body.has-insights {
+        padding-left: 16px;
+    }
+
+    html[dir="rtl"] .analysis-panel {
+        left: 8px;
+        right: auto;
+    }
+}
